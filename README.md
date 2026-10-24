@@ -12,7 +12,7 @@ A production-minded travel planning platform for comparing door-to-door journeys
 
 ## Project status
 
-**Current stage: Stage 1 — frontend foundation.** The responsive app shell, journey search form, results structure, validation, and honest unavailable states are implemented. No live travel integrations are connected yet.
+**Current stage: Stage 2 — airport reference and discovery.** The responsive frontend foundation is in place, and the backend now indexes the dated OurAirports source snapshot for airport/city lookup, IATA lookup, and nearby-airport ranking. No live flight or travel-provider integrations are connected yet.
 
 ## Planned structure
 
@@ -24,7 +24,7 @@ A production-minded travel planning platform for comparing door-to-door journeys
 
 ## Local development prerequisites
 
-Verified on 2026-10-24: Node.js v26.8.2, npm 11.19.1, Python 3.9.6, and Git 2.50.1. For the current frontend dependencies, use Node.js 22.12+, 24.x, or 26+. For backend development and future hosting, use Python 3.11 or newer; the installed Python 3.9.6 is below the project baseline and should not be used to pin current dependencies.
+Verified on 2026-10-24: Node.js v26.8.2, npm 11.19.1, Python 3.11.16, Python 3.9.6, and Git 2.50.1. For the current frontend dependencies, use Node.js 22.12+, 24.x, or 26+. Use Python 3.11 or newer for the backend.
 
 ## Run the frontend
 
@@ -36,7 +36,19 @@ npm run dev
 
 Open `http://localhost:3000`. Run `npm run test` for validation unit tests, `npm run lint` for linting, and `npm run build` to check the production build.
 
-Stage 1 manual checks and known limitations are in [docs/stage-1.md](docs/stage-1.md).
+Stage 1 checks are in [docs/stage-1.md](docs/stage-1.md). Stage 2 setup and API details are in [docs/stage-2.md](docs/stage-2.md).
+
+## Run the backend
+
+```sh
+python3.11 -m venv .venv
+.venv/bin/python -m pip install -r backend/requirements.txt
+cd backend
+../.venv/bin/python -m app.import_airports
+../.venv/bin/python -m uvicorn app.main:app --reload
+```
+
+The API listens on `http://localhost:8000`; its OpenAPI page is `/docs`. Refresh `data/airports.csv` from OurAirports before running the importer when you want a newer snapshot. See [data/README.md](data/README.md).
 
 ## Configuration
 
@@ -48,4 +60,4 @@ This project is intended to be hosted when deployment is reached. Keep configura
 
 ## Staged delivery
 
-See [docs/roadmap.md](docs/roadmap.md). The source plan requires one stage at a time and a stop for user direction after each stage. Stage 1 is complete; the next stage is airport reference data and location discovery.
+See [docs/roadmap.md](docs/roadmap.md). The source plan requires one stage at a time and a stop for user direction after each stage. Stage 2 is complete; the next stage is live flight search.

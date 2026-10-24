@@ -13,9 +13,9 @@ The controlling instructions are in `plan.md`. Implement exactly one stage at a 
 
 Built a responsive Next.js shell and yellow/black/white design system, search form, app navigation, results page structure, validation, and honest loading, error, and empty states. No example fares. Eight validation unit tests, lint, production build, valid/invalid search behavior, navigation, and a 390px mobile viewport were checked. See [stage-1.md](stage-1.md).
 
-## Stage 2 — Airport reference and discovery
+## Stage 2 — Airport reference and discovery (implementation complete; runtime verification pending)
 
-Download and index OurAirports; implement search, IATA lookup, distance, nearby-airport ranking, eligibility filters, and backend endpoints using actual dataset records. Retain source and dataset date.
+Downloaded the dated OurAirports CSV snapshot, indexed 86,280 airport records into SQLite, and added search, IATA lookup, Haversine nearby ranking, eligibility filters, and FastAPI endpoints. Data source and retrieval date are recorded. See [stage-2.md](stage-2.md).
 
 ## Stage 3 — Live flight search
 
