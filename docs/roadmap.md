@@ -2,16 +2,16 @@
 
 The controlling instructions are in `plan.md`. Implement exactly one stage at a time, verify it, report the required status, and stop for the user's instruction before proceeding.
 
-## Stage 0 — Technical feasibility and foundation (current)
+## Stage 0 — Technical feasibility and foundation (complete)
 
 - Inspect workspace and toolchain; establish Git and architecture.
 - Record provider access, credentials, legal terms, and cost gates.
 - Create README, architecture, integrations, cost controls, roadmap, env example, and initial structure.
 - No UI or live API integration.
 
-## Stage 1 — Frontend foundation
+## Stage 1 — Frontend foundation (complete)
 
-Build a responsive Next.js shell and the yellow/black/white design system, validated search form, navigation, and honest empty/loading/error states. No example fares. Verify accessibility and responsive layouts.
+Built a responsive Next.js shell and yellow/black/white design system, search form, app navigation, results page structure, validation, and honest loading, error, and empty states. No example fares. Eight validation unit tests, lint, production build, valid/invalid search behavior, navigation, and a 390px mobile viewport were checked. See [stage-1.md](stage-1.md).
 
 ## Stage 2 — Airport reference and discovery
 

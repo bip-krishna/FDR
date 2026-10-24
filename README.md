@@ -12,7 +12,7 @@ A production-minded travel planning platform for comparing door-to-door journeys
 
 ## Project status
 
-**Current stage: Stage 0 — technical feasibility and foundation.** The initial architecture, provider constraints, cost controls, and staged roadmap are documented under `docs/`. No application screens or live integrations have been implemented yet.
+**Current stage: Stage 1 — frontend foundation.** The responsive app shell, journey search form, results structure, validation, and honest unavailable states are implemented. No live travel integrations are connected yet.
 
 ## Planned structure
 
@@ -24,9 +24,19 @@ A production-minded travel planning platform for comparing door-to-door journeys
 
 ## Local development prerequisites
 
-Verified on 2026-10-24: Node.js v26.8.2, npm 11.19.1, Python 3.9.6, and Git 2.50.1. Use Node.js 20 or newer for current Next.js releases. For backend development and future hosting, use Python 3.11 or newer; the installed Python 3.9.6 is below the project baseline and should not be used to pin current dependencies.
+Verified on 2026-10-24: Node.js v26.8.2, npm 11.19.1, Python 3.9.6, and Git 2.50.1. For the current frontend dependencies, use Node.js 22.12+, 24.x, or 26+. For backend development and future hosting, use Python 3.11 or newer; the installed Python 3.9.6 is below the project baseline and should not be used to pin current dependencies.
 
-No package installation is needed for Stage 0. Setup commands will be added when Stage 1 begins.
+## Run the frontend
+
+```sh
+cd frontend
+npm install
+npm run dev
+```
+
+Open `http://localhost:3000`. Run `npm run test` for validation unit tests, `npm run lint` for linting, and `npm run build` to check the production build.
+
+Stage 1 manual checks and known limitations are in [docs/stage-1.md](docs/stage-1.md).
 
 ## Configuration
 
@@ -38,4 +48,4 @@ This project is intended to be hosted when deployment is reached. Keep configura
 
 ## Staged delivery
 
-See [docs/roadmap.md](docs/roadmap.md). The source plan requires one stage at a time and a stop for user direction after each stage. Stage 0 is the only stage being implemented now.
+See [docs/roadmap.md](docs/roadmap.md). The source plan requires one stage at a time and a stop for user direction after each stage. Stage 1 is complete; the next stage is airport reference data and location discovery.
