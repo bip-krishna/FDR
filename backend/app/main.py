@@ -20,6 +20,7 @@ from .settings import get_settings
 from .usage import finish_search_call, provider_readiness, reserve_search_call
 from .usage import reserve_google_maps_call
 from .google_maps import MapsProviderError, compute_route, fingerprint, geocode
+from .journeys import calculate_door_to_door_timing
 
 SOURCE = "OurAirports"
 DATASET_RETRIEVED_ON = date(2026, 10, 24)
@@ -234,6 +235,7 @@ async def estimate_journey_ground_access(request: GroundAccessRequest, session: 
     if departure_utc <= datetime.now(timezone.utc) or arrival_utc <= departure_utc:
         return {"status": "unavailable", "reason": "invalid_flight_timing",
                 "message": "The provider flight times are incomplete or inconsistent. No Google Maps request was made."}
+    scheduled_flight_minutes = math.ceil((arrival_utc - departure_utc).total_seconds() / 60)
 
     request_limit = settings.max_google_maps_calls_per_journey
     base_fingerprint = fingerprint({"origin": request.origin.casefold(), "destination": request.destination.casefold(),
@@ -291,21 +293,31 @@ async def estimate_journey_ground_access(request: GroundAccessRequest, session: 
 
     origin_minutes = math.ceil(legs[0]["duration_seconds"] / 60)
     destination_minutes = math.ceil(legs[1]["duration_seconds"] / 60)
-    total_minutes = max(origin_minutes, settings.airport_checkin_buffer_minutes) + request.flight_duration_minutes + destination_minutes
+    origin_schedule_window = math.ceil((departure_utc - origin_drive_at).total_seconds() / 60)
+    timing = calculate_door_to_door_timing(origin_minutes, origin_schedule_window,
+        scheduled_flight_minutes, destination_minutes)
     risks = ["Ground transport fares are unavailable.", "Airport access time uses a configured check-in buffer."]
-    if origin_minutes > settings.airport_checkin_buffer_minutes:
+    if origin_schedule_window < settings.airport_checkin_buffer_minutes:
+        risks.append("Less than the configured airport check-in buffer remains before departure.")
+    if origin_minutes > origin_schedule_window:
         risks.append("The origin ground estimate exceeds the configured airport check-in buffer.")
-    return {"status": "ready", "legs": legs,
+    if abs(scheduled_flight_minutes - request.flight_duration_minutes) > 120:
+        risks.append("Provider flight duration differs from the elapsed time between its local schedule timestamps.")
+    feasible = timing.feasible_for_scheduled_departure
+    return {"status": "ready" if feasible else "infeasible", "legs": legs,
             "departure_airport": request.departure_airport_code.upper(),
             "arrival_airport": request.arrival_airport_code.upper(),
             "flight_duration_minutes": request.flight_duration_minutes,
+            "scheduled_flight_elapsed_minutes": scheduled_flight_minutes,
             "airport_checkin_buffer_minutes": settings.airport_checkin_buffer_minutes,
             "origin_ground_minutes": origin_minutes, "destination_ground_minutes": destination_minutes,
-            "estimated_total_minutes": total_minutes,
-            "estimated_wait_at_departure_airport_minutes": max(0, settings.airport_checkin_buffer_minutes - origin_minutes),
+            "estimated_total_minutes": timing.total_minutes,
+            "estimated_wait_at_departure_airport_minutes": timing.airport_wait_minutes,
             "estimated_total_known_cost": None,
             "unpriced_components": ["origin ground transfer", "destination ground transfer"],
+            "feasible_for_scheduled_departure": feasible,
             "risks": risks,
+            "message": None if feasible else "The origin transfer is expected to reach the airport after the scheduled departure.",
             "source": "Google Maps Routes API + SerpApi Google Flights",
             "retrieved_at": datetime.now(timezone.utc).isoformat(), "calls_used": call_count}
 

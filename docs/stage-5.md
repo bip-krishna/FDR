@@ -7,6 +7,7 @@
 - The estimator includes the configured airport check-in buffer and flight itinerary duration, then returns an estimated door-to-door duration, access distances/times, risks, provider provenance, and retrieval timestamps.
 - Offer cards show the known flight fare, explicitly unpriced ground fares, total time only after both ground legs are estimated, provider booking link, and missing-data warnings.
 - The ranking avoids comparing a partial flight-only duration as a complete duration against an estimate with both ground legs. Cheapest sorts by known flight fare and labels ground costs as unknown; it does not claim a complete trip cost ranking.
+- Best overall weights estimated travel time at 55%, known flight fare at 35%, and flight connections at 10%. Offers with complete access timing rank ahead of flight-only entries; the page marks flight-only rankings as provisional.
 - Each explicit journey estimate is limited to four Google Maps calls: two Geocoding requests and up to two traffic-aware Routes requests. Each call is reserved against global daily/monthly caps, per-SKU caps, cost estimates, and the monthly budget before network access.
 
 ## Timing and cost rules
@@ -17,7 +18,7 @@ No ground transport fare provider is connected, so ground costs always remain un
 
 ## Verification and limits
 
-- Ranking tests cover fare ordering, duration ordering, transfer ordering, incomplete access, and priority for complete door-to-door estimates.
+- Backend: 17 tests passed. Frontend: 14 tests passed. Lint, TypeScript, and production build passed.
 - No live provider requests were made. The configured Google Maps key and quotas are absent, so external estimate behavior remains account-unverified.
 - Ground routes are estimated on demand, one flight offer at a time. Flight results remain provisional until the user estimates access for the alternatives being compared.
 - Airport check-in buffer defaults to 120 minutes and can be changed with `AIRPORT_CHECKIN_BUFFER_MINUTES`; it is disclosed as a planning assumption.

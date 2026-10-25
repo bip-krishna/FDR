@@ -340,18 +340,22 @@ function FlightResultCard({ offer, access, accessPending, onEstimateAccess }: {
       {offer.segments.length > 1 && <div className="flight-connections">{offer.segments.map((segment, index) => <span key={`${segment.flight_number ?? index}-${segment.departure_code}`}>{segment.flight_number ?? segment.airline ?? "Flight"}{index < offer.segments.length - 1 ? ` · ${offer.layovers[index]?.name ?? "connection"}` : ""}</span>)}</div>}
       <div className="journey-detail">
         {access?.status === "ready" ? <>
-          <div className="journey-access-line"><span>Origin → {offer.origin_code}</span><strong>{access.origin_ground_minutes} min</strong></div>
-          <div className="journey-access-line"><span>{offer.destination_code} → destination</span><strong>{access.destination_ground_minutes} min</strong></div>
+          <div className="journey-access-line"><span>Origin → {offer.origin_code}<small>{access.legs?.[0]?.traffic_mode === "future_prediction" ? "Future traffic prediction" : "Current traffic"} · {Math.round((access.legs?.[0]?.distance_meters ?? 0) / 1000)} km</small></span><strong>{access.origin_ground_minutes} min</strong></div>
+          <div className="journey-access-line"><span>{offer.destination_code} → destination<small>{access.legs?.[1]?.traffic_mode === "future_prediction" ? "Future traffic prediction" : "Current traffic"} · {Math.round((access.legs?.[1]?.distance_meters ?? 0) / 1000)} km</small></span><strong>{access.destination_ground_minutes} min</strong></div>
+          {access.legs?.map((leg) => <svg className="journey-access-map" viewBox="0 0 320 72" key={leg.kind} role="img" aria-label={`Google route geometry for ${leg.kind.replaceAll("_", " ")}`}>
+            <path d="M0 18H320M0 36H320M0 54H320" /><polyline points={toSvgPolyline(decodePolyline(leg.encoded_polyline))} />
+          </svg>)}
           <div className="journey-total"><span>Estimated door-to-door time</span><strong>{Math.floor((access.estimated_total_minutes ?? 0) / 60)}h {(access.estimated_total_minutes ?? 0) % 60}m</strong></div>
           <p className="journey-risk">Known total cost: {price}; ground transfer fares are not sourced. Includes a {access.airport_checkin_buffer_minutes}-minute airport buffer.</p>
           {access.risks?.map((risk) => <p className="journey-risk" key={risk}>{risk}</p>)}
           <p className="journey-risk">Ground route estimates use Google Maps. Retrieved {access.legs?.at(-1)?.retrieved_at ? new Date(access.legs.at(-1)!.retrieved_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" }) : "time unavailable"}.</p>
         </> : <>
           {access?.message && <p className="journey-risk" role="status">{access.message}</p>}
-          <p className="journey-risk">Ground access time and cost are unknown; displayed flight duration excludes airport transfers.</p>
-          <button className="journey-estimate-button" type="button" onClick={onEstimateAccess} disabled={accessPending}>
+          {access?.status === "infeasible" ? <p className="journey-risk">Ranked last: the estimated drive reaches the airport after the scheduled departure.</p> : <p className="journey-risk">Ground access time and cost are unknown; displayed flight duration excludes airport transfers.</p>}
+          {access?.risks?.map((risk) => <p className="journey-risk" key={risk}>{risk}</p>)}
+          {access?.status !== "infeasible" && <button className="journey-estimate-button" type="button" onClick={onEstimateAccess} disabled={accessPending}>
             {accessPending ? "Estimating access…" : access ? "Try access estimate again" : "Estimate airport access"}
-          </button>
+          </button>}
         </>}
       </div>
       <div className="flight-card-footer">

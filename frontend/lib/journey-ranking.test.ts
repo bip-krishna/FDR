@@ -35,4 +35,9 @@ describe("journey ranking", () => {
     const access = { slow: { status: "ready" as const, estimated_total_minutes: 330 } };
     expect(rankJourneyOffers(offers, access, "best")[0].id).toBe("slow");
   });
+
+  it("places an access route that misses departure after feasible offers", () => {
+    const access = { fast: { status: "infeasible" as const } };
+    expect(rankJourneyOffers(offers, access, "fastest").at(-1)?.id).toBe("fast");
+  });
 });

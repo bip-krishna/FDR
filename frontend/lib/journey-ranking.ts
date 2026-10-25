@@ -1,7 +1,7 @@
 import type { FlightOffer } from "./flight-api";
 
 export type JourneyGroundAccess = {
-  status: "ready" | "partial" | "unavailable" | "blocked" | "error";
+  status: "ready" | "infeasible" | "partial" | "unavailable" | "blocked" | "error";
   estimated_total_minutes?: number;
   origin_ground_minutes?: number;
   destination_ground_minutes?: number;
@@ -27,13 +27,16 @@ export function rankJourneyOffers(
     return (left.price ?? Number.POSITIVE_INFINITY) - (right.price ?? Number.POSITIVE_INFINITY);
   };
   return [...offers].sort((left, right) => {
-    if (ranking === "cheapest") return comparePrice(left, right) || (left.stops - right.stops) || duration(left) - duration(right);
+    const leftInfeasible = groundAccess[left.id]?.status === "infeasible";
+    const rightInfeasible = groundAccess[right.id]?.status === "infeasible";
+    if (leftInfeasible !== rightInfeasible) return leftInfeasible ? 1 : -1;
+    if (ranking === "cheapest") return comparePrice(left, right) || (left.stops - right.stops);
     if (ranking === "fastest") {
       if (hasGround(left) !== hasGround(right)) return hasGround(left) ? -1 : 1;
       return duration(left) - duration(right) || comparePrice(left, right);
     }
     if (ranking === "fewest-transfers") {
-      return left.stops - right.stops || comparePrice(left, right) || duration(left) - duration(right);
+      return left.stops - right.stops || comparePrice(left, right);
     }
 
     if (hasGround(left) !== hasGround(right)) return hasGround(left) ? -1 : 1;
@@ -45,7 +48,8 @@ export function rankJourneyOffers(
     const maxDuration = knownDurations.length ? Math.max(...knownDurations) : 0;
     const maxStops = Math.max(...offers.map((offer) => offer.stops), 0);
     const score = (offer: FlightOffer) => {
-      const durationScore = maxDuration === minDuration ? 1 : 1 - (duration(offer) - minDuration) / (maxDuration - minDuration);
+      const offerDuration = duration(offer);
+      const durationScore = !Number.isFinite(offerDuration) ? 0 : maxDuration === minDuration ? 1 : 1 - (offerDuration - minDuration) / (maxDuration - minDuration);
       const fareScore = offer.price == null ? 0 : maxPrice === minPrice ? 1 : 1 - (offer.price - minPrice) / (maxPrice - minPrice);
       const connectionScore = maxStops === 0 ? 1 : 1 - offer.stops / maxStops;
       return durationScore * 0.55 + fareScore * 0.35 + connectionScore * 0.1;
@@ -61,5 +65,5 @@ export function journeyRankingNote(ranking: JourneyRanking, hasGroundEstimates: 
     : "Provisional flight-only ranking. Estimate airport access to include door-to-door time.";
   if (ranking === "fastest") return "Sorted by estimated door-to-door time, including airport access and the configured check-in buffer.";
   if (ranking === "fewest-transfers") return "Sorted by flight connections. Each journey also includes origin and destination ground legs.";
-  return "Balanced ranking uses estimated journey time, known flight fare, and flight connections. Ground fares remain unpriced.";
+  return "Balanced ranking weights estimated travel time 55%, known flight fare 35%, and flight connections 10%. Ground fares remain unpriced.";
 }

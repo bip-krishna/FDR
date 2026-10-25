@@ -79,15 +79,16 @@ export type TransferEstimate = {
 };
 
 export type GroundAccessEstimate = {
-  status: "ready" | "partial" | "unavailable" | "blocked" | "error";
+  status: "ready" | "infeasible" | "partial" | "unavailable" | "blocked" | "error";
   reason?: string;
   message?: string;
-  legs?: { kind: string; distance_meters: number; duration_seconds: number; static_duration_seconds: number; encoded_polyline: string; retrieved_at: string }[];
+  legs?: { kind: string; distance_meters: number; duration_seconds: number; static_duration_seconds: number; encoded_polyline: string; retrieved_at: string; traffic_mode?: "current_traffic" | "future_prediction" }[];
   origin_ground_minutes?: number;
   destination_ground_minutes?: number;
   airport_checkin_buffer_minutes?: number;
   estimated_wait_at_departure_airport_minutes?: number;
   estimated_total_minutes?: number;
+  scheduled_flight_elapsed_minutes?: number;
   estimated_total_known_cost?: number | null;
   unpriced_components?: string[];
   risks?: string[];
