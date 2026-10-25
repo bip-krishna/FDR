@@ -183,6 +183,26 @@ a { color: inherit; text-decoration: none; }
 .result-list-heading p, .results-side p { margin: 5px 0 0; color: #777; font-size: 10px; line-height: 1.55; }
 .results-empty { margin-top: 17px; }
 .results-side { padding: 20px; }
+.transfer-explorer { margin-top: 18px; padding-top: 16px; border-top: 1px solid #ededeb; }
+.transfer-title-row { display: flex; align-items: flex-start; gap: 10px; }
+.transfer-title-row h3 { margin: 0; font-size: 12px; font-weight: 680; }
+.transfer-title-row p { margin-top: 4px; }
+.transfer-mark { display: grid; place-items: center; width: 28px; height: 28px; flex: 0 0 28px; color: #4e3d00; background: #fff4c5; border-radius: 7px; }
+.transfer-mark svg { width: 14px; height: 14px; }
+.transfer-form { display: grid; gap: 9px; margin-top: 13px; }
+.transfer-form label { display: grid; gap: 4px; color: #737373; font-size: 10px; }
+.transfer-form input { width: 100%; min-width: 0; height: 34px; padding: 0 9px; border: 1px solid #e6e5e1; border-radius: 6px; color: #232323; background: #fff; font: inherit; font-size: 11px; }
+.transfer-form button { display: flex; justify-content: center; align-items: center; gap: 7px; height: 35px; border: 0; border-radius: 6px; color: #191919; background: #f2cb34; font: inherit; font-size: 11px; font-weight: 650; cursor: pointer; }
+.transfer-form button:disabled { opacity: .58; cursor: not-allowed; }
+.transfer-form button svg { width: 13px; height: 13px; }
+.transfer-note { margin-top: 9px !important; color: #777 !important; font-size: 10px !important; }
+.transfer-result { margin-top: 12px; }
+.transfer-stats { display: flex; justify-content: space-between; color: #252525; font-size: 11px; }
+.transfer-map { display: block; width: 100%; height: 116px; margin-top: 10px; overflow: hidden; border: 1px solid #ebe9e2; border-radius: 7px; background: #faf9f5; }
+.transfer-map-grid { fill: none; stroke: #eae8e0; stroke-width: 1; }
+.transfer-map polyline { fill: none; stroke: #d0a900; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+.transfer-map circle { fill: #1c1c1c; stroke: #fff; stroke-width: 2; }
+.transfer-traffic { display: flex; align-items: center; gap: 6px; margin: 10px 0 0; color: #4e4e4e; font-size: 10px; }
 .coverage-status { display: flex; align-items: center; gap: 8px; margin-top: 16px; padding: 11px; border: 1px solid var(--border); border-radius: 6px; color: #555; font-size: 10px; }
 .coverage-status .provider-dot { margin: 0; }
 .results-side .coverage-disclaimer { margin-top: 13px; padding-top: 12px; border-top: 1px solid #ededeb; }
@@ -198,6 +218,17 @@ a { color: inherit; text-decoration: none; }
 .stage-label-live { background: #fff3bd; color: #654d00; }
 .flight-search-message { margin: 14px 0 0; color: #666; font-size: 11px; line-height: 1.55; }
 .flight-results { display: grid; gap: 11px; margin-top: 13px; }
+.journey-ranking { display: flex; gap: 6px; margin-top: 14px; overflow-x: auto; }
+.journey-ranking button { flex: none; min-height: 30px; padding: 0 10px; border: 1px solid #e7e5df; border-radius: 5px; color: #555; background: #fff; font: inherit; font-size: 10px; cursor: pointer; }
+.journey-ranking button[aria-pressed="true"] { border-color: #d4b12b; color: #403300; background: #fff7d6; font-weight: 650; }
+.journey-ranking-note { margin: 8px 0 0; color: #777; font-size: 10px; line-height: 1.5; }
+.journey-detail { display: grid; gap: 7px; margin-top: 14px; padding: 11px; border-radius: 6px; background: #faf9f5; }
+.journey-access-line, .journey-total { display: flex; justify-content: space-between; gap: 10px; color: #555; font-size: 10px; }
+.journey-access-line strong, .journey-total strong { color: #252525; }
+.journey-total { padding-top: 8px; border-top: 1px solid #e9e7df; color: #333; font-weight: 650; }
+.journey-risk { margin: 0; color: #777; font-size: 9px; line-height: 1.5; }
+.journey-estimate-button { justify-self: start; min-height: 29px; padding: 0 9px; border: 1px solid #d7bd4b; border-radius: 5px; color: #4c3c00; background: #fff8dc; font: inherit; font-size: 10px; font-weight: 650; cursor: pointer; }
+.journey-estimate-button:disabled { opacity: .6; cursor: wait; }
 .flight-card { padding: 16px; border: 1px solid var(--border); border-radius: 7px; background: #fff; }
 .flight-card-top { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
 .flight-airlines { color: #444; font-size: 11px; font-weight: 650; }

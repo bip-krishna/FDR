@@ -1,11 +1,11 @@
 import math
 from contextlib import asynccontextmanager
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import httpx
 from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
@@ -18,6 +18,8 @@ from .flights import (
 )
 from .settings import get_settings
 from .usage import finish_search_call, provider_readiness, reserve_search_call
+from .usage import reserve_google_maps_call
+from .google_maps import MapsProviderError, compute_route, fingerprint, geocode
 
 SOURCE = "OurAirports"
 DATASET_RETRIEVED_ON = date(2026, 10, 24)
@@ -66,9 +68,246 @@ class AirportResults(BaseModel):
     total: int
 
 
+class TransferRequest(BaseModel):
+    origin: str
+    destination: str
+    departure_time: datetime | None = None
+
+
+class GroundAccessRequest(BaseModel):
+    origin: str = Field(min_length=2, max_length=160)
+    destination: str = Field(min_length=2, max_length=160)
+    departure_airport_code: str = Field(pattern=r"^[A-Za-z]{3}$")
+    arrival_airport_code: str = Field(pattern=r"^[A-Za-z]{3}$")
+    departure_local_time: str = Field(min_length=10, max_length=40)
+    arrival_local_time: str = Field(min_length=10, max_length=40)
+    flight_duration_minutes: int = Field(ge=1, le=2880)
+
+
 def get_session():
     with SessionLocal() as session:
         yield session
+
+
+def maps_unavailable_reason(settings, operation: str) -> str | None:
+    if not settings.google_maps_enabled:
+        return "google_maps_disabled"
+    if not settings.google_maps_key:
+        return "missing_credentials"
+    if operation == "geocoding" and not settings.google_geocoding_enabled:
+        return "google_geocoding_disabled"
+    if operation == "routes" and not settings.google_routes_enabled:
+        return "google_routes_disabled"
+    if operation == "journey" and (not settings.google_geocoding_enabled or not settings.google_routes_enabled):
+        return "google_maps_services_disabled"
+    if not settings.max_external_calls_day or not settings.max_external_calls_month:
+        return "global_request_limits_not_configured"
+    request_limit = (settings.max_google_maps_calls_per_journey if operation == "journey"
+                     else settings.max_google_maps_calls_per_transfer)
+    if not request_limit:
+        return "per_transfer_request_limit_not_configured"
+    if operation == "geocoding" and (not settings.google_geocoding_daily_limit or
+            not settings.google_geocoding_monthly_limit or settings.google_geocoding_cost_inr is None):
+        return "geocoding_limits_or_cost_not_configured"
+    if operation == "routes" and (not settings.google_routes_daily_limit or
+            not settings.google_routes_monthly_limit or settings.google_routes_cost_inr is None):
+        return "routes_limits_or_cost_not_configured"
+    if operation == "journey" and (not settings.google_geocoding_daily_limit or
+            not settings.google_geocoding_monthly_limit or settings.google_geocoding_cost_inr is None or
+            not settings.google_routes_daily_limit or not settings.google_routes_monthly_limit or
+            settings.google_routes_cost_inr is None):
+        return "routes_or_geocoding_limits_or_cost_not_configured"
+    return None
+
+
+@app.get("/api/providers/google-maps")
+def google_maps_status(session: Session = Depends(get_session)):
+    settings = get_settings()
+    reason = maps_unavailable_reason(settings, "geocoding") or maps_unavailable_reason(settings, "routes")
+    return {"provider": "Google Maps Platform", "status": "unavailable" if reason else "configured",
+            "reason": reason, "limits": {
+                "geocoding_daily": settings.google_geocoding_daily_limit,
+                "geocoding_monthly": settings.google_geocoding_monthly_limit,
+                "routes_daily": settings.google_routes_daily_limit,
+                "routes_monthly": settings.google_routes_monthly_limit,
+                "calls_per_transfer": settings.max_google_maps_calls_per_transfer,
+            }}
+
+
+@app.post("/api/transfers/estimate")
+async def estimate_transfer(request: TransferRequest, session: Session = Depends(get_session)):
+    settings = get_settings()
+    reason = maps_unavailable_reason(settings, "geocoding") or maps_unavailable_reason(settings, "routes")
+    if reason:
+        return {"status": "unavailable", "reason": reason,
+                "message": "Ground transfer estimates are not configured. No Google Maps request was made."}
+    origin_text, destination_text = request.origin.strip(), request.destination.strip()
+    if not origin_text or not destination_text or len(origin_text) > 160 or len(destination_text) > 160:
+        raise HTTPException(status_code=422, detail="Enter two locations of 1–160 characters.")
+    departure = request.departure_time or datetime.now(timezone.utc)
+    if departure.tzinfo is None:
+        departure = departure.replace(tzinfo=timezone.utc)
+    now = datetime.now(timezone.utc)
+    if departure < now.replace(second=0, microsecond=0):
+        raise HTTPException(status_code=422, detail="Transfer departure time cannot be in the past.")
+    call_count = 0
+    fingerprint_base = fingerprint({"origin": origin_text.casefold(), "destination": destination_text.casefold()})
+    locations = []
+    for index, address in enumerate((origin_text, destination_text)):
+        allowed, block, reservation = reserve_google_maps_call(session, settings, "geocoding",
+            fingerprint(f"{fingerprint_base}:geocode:{index}"), call_count)
+        if not allowed:
+            return {"status": "blocked", "reason": block, "message": "Ground transfer stopped by its configured quota or cost limit.",
+                    "calls_used": call_count}
+        call_count += 1
+        try:
+            location = await geocode(address, settings.google_maps_key, settings.google_maps_timeout_seconds)
+            finish_search_call(session, reservation, "success")
+            locations.append(location)
+        except (httpx.HTTPError, ValueError, KeyError, TypeError, MapsProviderError) as error:
+            finish_search_call(session, reservation, getattr(error, "reason", "provider_error"))
+            return {"status": "error", "reason": getattr(error, "reason", "provider_error"),
+                    "message": "Google Maps could not resolve both locations; no route estimate is available.", "calls_used": call_count}
+
+    allowed, block, reservation = reserve_google_maps_call(session, settings, "routes_traffic_aware",
+        fingerprint(f"{fingerprint_base}:route"), call_count)
+    if not allowed:
+        return {"status": "blocked", "reason": block,
+                "message": "Route estimate stopped by its configured quota or cost limit.", "calls_used": call_count}
+    call_count += 1
+    try:
+        route = await compute_route(locations[0], locations[1], departure,
+            settings.google_maps_key, settings.google_maps_timeout_seconds)
+        finish_search_call(session, reservation, "success")
+    except (httpx.HTTPError, ValueError, KeyError, TypeError, MapsProviderError) as error:
+        finish_search_call(session, reservation, getattr(error, "reason", "provider_error"))
+        return {"status": "error", "reason": getattr(error, "reason", "provider_error"),
+                "message": "Google Maps could not calculate a drivable route at this time.", "calls_used": call_count}
+    departure_mode = "current_traffic" if (departure - now).total_seconds() <= 900 else "future_prediction"
+    arrival_time = datetime.fromtimestamp(departure.timestamp() + route["duration_seconds"], timezone.utc)
+    return {"status": "ready", "origin": locations[0], "destination": locations[1], **route,
+            "departure_time": departure.isoformat(), "traffic_mode": departure_mode,
+            "arrival_time_estimate": arrival_time.isoformat(),
+            "traffic_delay_seconds": max(0, route["duration_seconds"] - route["static_duration_seconds"]),
+            "traffic_label": "Current traffic conditions" if departure_mode == "current_traffic" else "Future traffic prediction",
+            "provider": "Google Maps Routes API", "retrieved_at": datetime.now(timezone.utc).isoformat(),
+            "calls_used": call_count, "ranking_duration_minutes": math.ceil(route["duration_seconds"] / 60)}
+
+
+@app.post("/api/journeys/ground-access")
+async def estimate_journey_ground_access(request: GroundAccessRequest, session: Session = Depends(get_session)):
+    settings = get_settings()
+    reason = maps_unavailable_reason(settings, "journey")
+    if reason:
+        return {"status": "unavailable", "reason": reason,
+                "message": "Door-to-door access estimates are not configured. No Google Maps request was made."}
+    limit = settings.max_google_maps_calls_per_journey
+    if limit < 4:
+        return {"status": "unavailable", "reason": "journey_call_limit_below_required",
+                "message": "Each complete estimate needs two geocoding and two route requests. No provider call was made."}
+
+    departure_airport = session.scalar(select(Airport).where(
+        Airport.iata_code == request.departure_airport_code.upper(), Airport.scheduled_service.is_(True)))
+    arrival_airport = session.scalar(select(Airport).where(
+        Airport.iata_code == request.arrival_airport_code.upper(), Airport.scheduled_service.is_(True)))
+    airports = [departure_airport, arrival_airport]
+    if any(airport is None or airport.latitude_deg is None or airport.longitude_deg is None for airport in airports):
+        return {"status": "unavailable", "reason": "airport_coordinates_unavailable",
+                "message": "Airport coordinates are missing from the reference dataset. No Google Maps request was made."}
+    try:
+        from zoneinfo import ZoneInfo
+        from timezonefinder import timezone_at
+
+        departure_zone_name = timezone_at(lng=departure_airport.longitude_deg, lat=departure_airport.latitude_deg)
+        arrival_zone_name = timezone_at(lng=arrival_airport.longitude_deg, lat=arrival_airport.latitude_deg)
+        if not departure_zone_name or not arrival_zone_name:
+            raise ValueError("Timezone could not be identified.")
+        departure_local = datetime.fromisoformat(request.departure_local_time.replace("Z", "+00:00"))
+        arrival_local = datetime.fromisoformat(request.arrival_local_time.replace("Z", "+00:00"))
+        departure_at = departure_local.replace(tzinfo=ZoneInfo(departure_zone_name)) if departure_local.tzinfo is None else departure_local
+        arrival_at = arrival_local.replace(tzinfo=ZoneInfo(arrival_zone_name)) if arrival_local.tzinfo is None else arrival_local
+        departure_utc = departure_at.astimezone(timezone.utc)
+        arrival_utc = arrival_at.astimezone(timezone.utc)
+    except (ImportError, ValueError, TypeError, KeyError):
+        return {"status": "unavailable", "reason": "airport_time_zone_unavailable",
+                "message": "Airport time zones could not be resolved. No Google Maps request was made."}
+    if departure_utc <= datetime.now(timezone.utc) or arrival_utc <= departure_utc:
+        return {"status": "unavailable", "reason": "invalid_flight_timing",
+                "message": "The provider flight times are incomplete or inconsistent. No Google Maps request was made."}
+
+    request_limit = settings.max_google_maps_calls_per_journey
+    base_fingerprint = fingerprint({"origin": request.origin.casefold(), "destination": request.destination.casefold(),
+        "departure_airport": request.departure_airport_code.upper(), "arrival_airport": request.arrival_airport_code.upper(),
+        "departure": departure_utc.isoformat(), "arrival": arrival_utc.isoformat()})
+    call_count = 0
+    points = []
+    for index, location_text in enumerate((request.origin, request.destination)):
+        allowed, block, reservation = reserve_google_maps_call(session, settings, "geocoding",
+            fingerprint(f"{base_fingerprint}:geocode:{index}"), call_count, request_limit)
+        if not allowed:
+            return {"status": "blocked", "reason": block, "calls_used": call_count,
+                    "message": "Door-to-door calculation stopped at its configured quota or cost limit."}
+        call_count += 1
+        try:
+            point = await geocode(location_text, settings.google_maps_key, settings.google_maps_timeout_seconds)
+            finish_search_call(session, reservation, "success")
+            points.append(point)
+        except (httpx.HTTPError, ValueError, KeyError, TypeError, MapsProviderError) as error:
+            finish_search_call(session, reservation, getattr(error, "reason", "provider_error"))
+            return {"status": "error", "reason": getattr(error, "reason", "provider_error"), "calls_used": call_count,
+                    "message": "A city location could not be resolved. No airport-access routes are available."}
+
+    # Estimate the outbound drive at the configured check-in-buffer departure time.
+    origin_drive_at = departure_utc - timedelta(minutes=settings.airport_checkin_buffer_minutes)
+    if origin_drive_at < datetime.now(timezone.utc):
+        origin_drive_at = datetime.now(timezone.utc)
+    route_specs = [
+        ("origin_to_departure_airport", points[0],
+         {"latitude": departure_airport.latitude_deg, "longitude": departure_airport.longitude_deg}, origin_drive_at),
+        ("arrival_airport_to_destination", {"latitude": arrival_airport.latitude_deg, "longitude": arrival_airport.longitude_deg},
+         points[1], arrival_utc),
+    ]
+    legs = []
+    for leg_name, leg_origin, leg_destination, leg_departure in route_specs:
+        allowed, block, reservation = reserve_google_maps_call(session, settings, "routes_traffic_aware",
+            fingerprint(f"{base_fingerprint}:{leg_name}"), call_count, request_limit)
+        if not allowed:
+            return {"status": "blocked", "reason": block, "calls_used": call_count, "legs": legs,
+                    "message": "Door-to-door calculation stopped at its configured quota or cost limit."}
+        call_count += 1
+        try:
+            route = await compute_route(leg_origin, leg_destination, leg_departure,
+                settings.google_maps_key, settings.google_maps_timeout_seconds)
+            finish_search_call(session, reservation, "success")
+            traffic_mode = "current_traffic" if (leg_departure - datetime.now(timezone.utc)).total_seconds() <= 900 else "future_prediction"
+            legs.append({"kind": leg_name, **route, "departure_time": leg_departure.isoformat(),
+                         "traffic_mode": traffic_mode,
+                         "provider": "Google Maps Routes API", "retrieved_at": datetime.now(timezone.utc).isoformat()})
+        except (httpx.HTTPError, ValueError, KeyError, TypeError, MapsProviderError) as error:
+            finish_search_call(session, reservation, getattr(error, "reason", "provider_error"))
+            return {"status": "partial", "reason": getattr(error, "reason", "provider_error"),
+                    "calls_used": call_count, "legs": legs,
+                    "message": "A ground leg could not be estimated. Door-to-door duration is incomplete."}
+
+    origin_minutes = math.ceil(legs[0]["duration_seconds"] / 60)
+    destination_minutes = math.ceil(legs[1]["duration_seconds"] / 60)
+    total_minutes = max(origin_minutes, settings.airport_checkin_buffer_minutes) + request.flight_duration_minutes + destination_minutes
+    risks = ["Ground transport fares are unavailable.", "Airport access time uses a configured check-in buffer."]
+    if origin_minutes > settings.airport_checkin_buffer_minutes:
+        risks.append("The origin ground estimate exceeds the configured airport check-in buffer.")
+    return {"status": "ready", "legs": legs,
+            "departure_airport": request.departure_airport_code.upper(),
+            "arrival_airport": request.arrival_airport_code.upper(),
+            "flight_duration_minutes": request.flight_duration_minutes,
+            "airport_checkin_buffer_minutes": settings.airport_checkin_buffer_minutes,
+            "origin_ground_minutes": origin_minutes, "destination_ground_minutes": destination_minutes,
+            "estimated_total_minutes": total_minutes,
+            "estimated_wait_at_departure_airport_minutes": max(0, settings.airport_checkin_buffer_minutes - origin_minutes),
+            "estimated_total_known_cost": None,
+            "unpriced_components": ["origin ground transfer", "destination ground transfer"],
+            "risks": risks,
+            "source": "Google Maps Routes API + SerpApi Google Flights",
+            "retrieved_at": datetime.now(timezone.utc).isoformat(), "calls_used": call_count}
 
 
 def eligible(airport: Airport) -> bool:

@@ -46,6 +46,20 @@ class Settings:
     default_google_country: str
     default_google_language: str
     frontend_origins: tuple[str, ...]
+    google_maps_key: str | None = None
+    google_maps_enabled: bool = False
+    google_geocoding_enabled: bool = False
+    google_routes_enabled: bool = False
+    google_geocoding_daily_limit: int = 0
+    google_geocoding_monthly_limit: int = 0
+    google_geocoding_cost_inr: float | None = None
+    google_routes_daily_limit: int = 0
+    google_routes_monthly_limit: int = 0
+    google_routes_cost_inr: float | None = None
+    max_google_maps_calls_per_transfer: int = 0
+    google_maps_timeout_seconds: float = 20.0
+    max_google_maps_calls_per_journey: int = 0
+    airport_checkin_buffer_minutes: int = 120
 
 
 def get_settings() -> Settings:
@@ -58,6 +72,10 @@ def get_settings() -> Settings:
     except ValueError:
         budget = 0.0
     key = os.getenv("SERPAPI_API_KEY", "").strip()
+    try:
+        maps_timeout = max(1.0, min(60.0, float(os.getenv("GOOGLE_MAPS_TIMEOUT_SECONDS", "20"))))
+    except ValueError:
+        maps_timeout = 20.0
     return Settings(
         serpapi_key=key or None,
         serpapi_enabled=_enabled("ENABLE_SERPAPI"),
@@ -74,4 +92,18 @@ def get_settings() -> Settings:
         default_google_language=os.getenv("FLIGHT_GOOGLE_LANGUAGE", "en").strip().lower(),
         frontend_origins=tuple(origin.strip() for origin in os.getenv(
             "FRONTEND_ORIGINS", "http://localhost:3000").split(",") if origin.strip()),
+        google_maps_key=(os.getenv("GOOGLE_MAPS_API_KEY", "").strip() or None),
+        google_maps_enabled=_enabled("ENABLE_GOOGLE_MAPS"),
+        google_geocoding_enabled=_enabled("ENABLE_GOOGLE_GEOCODING"),
+        google_routes_enabled=_enabled("ENABLE_GOOGLE_ROUTES"),
+        google_geocoding_daily_limit=_integer("GOOGLE_GEOCODING_MAX_CALLS_PER_DAY"),
+        google_geocoding_monthly_limit=_integer("GOOGLE_GEOCODING_MAX_CALLS_PER_MONTH"),
+        google_geocoding_cost_inr=_amount("GOOGLE_GEOCODING_COST_PER_CALL_INR"),
+        google_routes_daily_limit=_integer("GOOGLE_ROUTES_MAX_CALLS_PER_DAY"),
+        google_routes_monthly_limit=_integer("GOOGLE_ROUTES_MAX_CALLS_PER_MONTH"),
+        google_routes_cost_inr=_amount("GOOGLE_ROUTES_COST_PER_CALL_INR"),
+        max_google_maps_calls_per_transfer=_integer("MAX_GOOGLE_MAPS_CALLS_PER_TRANSFER"),
+        google_maps_timeout_seconds=maps_timeout,
+        max_google_maps_calls_per_journey=_integer("MAX_GOOGLE_MAPS_CALLS_PER_JOURNEY"),
+        airport_checkin_buffer_minutes=min(360, _integer("AIRPORT_CHECKIN_BUFFER_MINUTES", 120)),
     )

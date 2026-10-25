@@ -21,13 +21,13 @@ Downloaded the dated OurAirports CSV snapshot, indexed 86,280 airport records in
 
 Added the SerpApi adapter and one-way search path, provenance, durable quota ledger, normalization, and bounded airport alternatives. The local environment has no provider credentials and all request caps remain zero; the API correctly refuses live calls until configured. Tests use isolated fixtures and mocked provider transport only. See [stage-3.md](stage-3.md).
 
-## Stage 4 — Maps and ground transfers
+## Stage 4 — Maps and ground transfers (implemented; account verification pending)
 
-Implement selected Google Routes/Geocoding/Places capabilities only after SKU, billing, key restrictions, and app-side caps are documented. Add map geometry and provenance-aware transfer estimates.
+Added deliberate Geocoding and traffic-aware Routes requests, separate SKU estimates and caps, shared budget reservations, route geometry rendering, traffic labels, and failure states. No key or quotas are configured, so the provider remains unavailable. See [stage-4.md](stage-4.md).
 
-## Stage 5 — End-to-end flight optimization
+## Stage 5 — End-to-end flight optimization (implemented; live account verification pending)
 
-Combine airport access, live flights, and destination transfers; validate chronology and show known versus unknown prices and clear coverage.
+Added bounded on-demand airport access estimates, time-zone conversion, door-to-door elapsed-time estimates, four ranking modes, known/unknown cost disclosure, risks, sources, and booking links. Google calls remain disabled until key, quotas, and costs are configured. See [stage-5.md](stage-5.md).
 
 ## Stage 6 — Rail integration
 

@@ -114,3 +114,62 @@ def finish_search_call(session: Session, usage: ProviderUsage, status: str) -> N
     session.add(usage)
     session.commit()
 
+
+def reserve_google_maps_call(session: Session, settings: Settings, operation: str,
+                             fingerprint: str, calls_used: int,
+                             request_limit: int | None = None) -> tuple[bool, str | None, ProviderUsage | None]:
+    """Reserve one Google Maps SKU event, failing closed before network access."""
+    if not settings.google_maps_enabled:
+        return False, "google_maps_disabled", None
+    if not settings.google_maps_key:
+        return False, "missing_credentials", None
+    if operation == "geocoding":
+        enabled = settings.google_geocoding_enabled
+        daily_limit, monthly_limit, estimate = (settings.google_geocoding_daily_limit,
+            settings.google_geocoding_monthly_limit, settings.google_geocoding_cost_inr)
+    elif operation == "routes_traffic_aware":
+        enabled = settings.google_routes_enabled
+        daily_limit, monthly_limit, estimate = (settings.google_routes_daily_limit,
+            settings.google_routes_monthly_limit, settings.google_routes_cost_inr)
+    else:
+        return False, "unknown_google_maps_operation", None
+    if not enabled:
+        return False, f"google_{operation}_disabled", None
+    if not settings.max_external_calls_day or not settings.max_external_calls_month:
+        return False, "global_request_limits_not_configured", None
+    allowed_calls = settings.max_google_maps_calls_per_transfer if request_limit is None else request_limit
+    if not allowed_calls:
+        return False, "per_transfer_request_limit_not_configured", None
+    if not daily_limit or not monthly_limit:
+        return False, "provider_request_limits_not_configured", None
+    if estimate is None:
+        return False, "provider_cost_estimate_not_configured", None
+    if calls_used >= allowed_calls:
+        return False, "per_request_call_limit_reached", None
+
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    month_start, day_start = current_month_start(now), now.replace(hour=0, minute=0, second=0, microsecond=0)
+    all_month = session.scalar(select(func.count()).select_from(ProviderUsage).where(ProviderUsage.requested_at >= month_start)) or 0
+    all_day = session.scalar(select(func.count()).select_from(ProviderUsage).where(ProviderUsage.requested_at >= day_start)) or 0
+    sku_month = session.scalar(select(func.count()).select_from(ProviderUsage).where(
+        ProviderUsage.provider == "google_maps", ProviderUsage.operation == operation,
+        ProviderUsage.requested_at >= month_start)) or 0
+    sku_day = session.scalar(select(func.count()).select_from(ProviderUsage).where(
+        ProviderUsage.provider == "google_maps", ProviderUsage.operation == operation,
+        ProviderUsage.requested_at >= day_start)) or 0
+    spent = session.scalar(select(func.coalesce(func.sum(ProviderUsage.estimated_cost_inr), 0)).where(
+        ProviderUsage.requested_at >= month_start)) or 0
+    if all_month >= settings.max_external_calls_month or sku_month >= monthly_limit:
+        return False, "monthly_request_limit_reached", None
+    if all_day >= settings.max_external_calls_day or sku_day >= daily_limit:
+        return False, "daily_request_limit_reached", None
+    if float(spent) + estimate > settings.monthly_external_budget_inr:
+        return False, "monthly_spend_limit_reached", None
+
+    usage = ProviderUsage(provider="google_maps", operation=operation,
+        request_fingerprint=fingerprint, status="reserved", estimated_cost_inr=estimate, requested_at=now)
+    session.add(usage)
+    session.commit()
+    session.refresh(usage)
+    return True, None, usage
+

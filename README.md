@@ -12,7 +12,7 @@ A production-minded travel planning platform for comparing door-to-door journeys
 
 ## Project status
 
-**Current stage: Stage 3 — live flight search.** The backend has a SerpApi Google Flights adapter, normalized one-way offers, bounded alternative-airport search, and persistent usage controls. Live searches remain disabled until a key, an account-specific cap, and a cost estimate are configured.
+**Current stage: Stage 5 — end-to-end flight optimization.** Flight offers can be ranked, and users can request quota-guarded airport access estimates for selected itineraries. SerpApi and Google Maps remain disabled until credentials, account-specific caps, and cost estimates are configured.
 
 ## Planned structure
 
@@ -37,6 +37,8 @@ npm run dev
 Open `http://localhost:3000`. Run `npm run test` for validation unit tests, `npm run lint` for linting, and `npm run build` to check the production build.
 
 Stage 1 checks are in [docs/stage-1.md](docs/stage-1.md). Stage 2 setup and API details are in [docs/stage-2.md](docs/stage-2.md).
+Stage 4 route and provider controls are in [docs/stage-4.md](docs/stage-4.md).
+Stage 5 itinerary ranking and access estimates are in [docs/stage-5.md](docs/stage-5.md).
 
 ## Run the backend
 
@@ -62,4 +64,4 @@ This project is intended to be hosted when deployment is reached. Keep configura
 
 ## Staged delivery
 
-See [docs/roadmap.md](docs/roadmap.md). The source plan requires one stage at a time and a stop for user direction after each stage. Stage 3 is complete; the next stage is Maps and ground transfers.
+See [docs/roadmap.md](docs/roadmap.md). The source plan requires one stage at a time and a stop for user direction after each stage. Stages 1–5 are implemented; the next stage is Indian Railways integration.
