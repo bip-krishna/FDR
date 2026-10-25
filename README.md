@@ -12,7 +12,7 @@ A production-minded travel planning platform for comparing door-to-door journeys
 
 ## Project status
 
-**Current stage: Stage 2 — airport reference and discovery.** The responsive frontend foundation is in place, and the backend now indexes the dated OurAirports source snapshot for airport/city lookup, IATA lookup, and nearby-airport ranking. No live flight or travel-provider integrations are connected yet.
+**Current stage: Stage 3 — live flight search.** The backend has a SerpApi Google Flights adapter, normalized one-way offers, bounded alternative-airport search, and persistent usage controls. Live searches remain disabled until a key, an account-specific cap, and a cost estimate are configured.
 
 ## Planned structure
 
@@ -50,6 +50,8 @@ cd backend
 
 The API listens on `http://localhost:8000`; its OpenAPI page is `/docs`. Refresh `data/airports.csv` from OurAirports before running the importer when you want a newer snapshot. See [data/README.md](data/README.md).
 
+For the frontend, copy `frontend/.env.example` to `frontend/.env.local` and set `NEXT_PUBLIC_FDR_API_URL=http://localhost:8000`. This URL is public and contains no provider credential. When hosted, set it to the deployed API URL and configure `FRONTEND_ORIGINS` to the deployed frontend origin.
+
 ## Configuration
 
 Copy `.env.example` to a private local `.env` only when beginning provider work. Keep credentials server-side and never commit them. All paid or quota-based integrations are disabled by default.
@@ -60,4 +62,4 @@ This project is intended to be hosted when deployment is reached. Keep configura
 
 ## Staged delivery
 
-See [docs/roadmap.md](docs/roadmap.md). The source plan requires one stage at a time and a stop for user direction after each stage. Stage 2 is complete; the next stage is live flight search.
+See [docs/roadmap.md](docs/roadmap.md). The source plan requires one stage at a time and a stop for user direction after each stage. Stage 3 is complete; the next stage is Maps and ground transfers.

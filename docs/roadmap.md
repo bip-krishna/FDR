@@ -17,9 +17,9 @@ Built a responsive Next.js shell and yellow/black/white design system, search fo
 
 Downloaded the dated OurAirports CSV snapshot, indexed 86,280 airport records into SQLite, and added search, IATA lookup, Haversine nearby ranking, eligibility filters, and FastAPI endpoints. Data source and retrieval date are recorded. See [stage-2.md](stage-2.md).
 
-## Stage 3 — Live flight search
+## Stage 3 — Live flight search (implemented; live account verification pending)
 
-Implement the SerpApi adapter and production search path, provenance, quota ledger, normalization, and shortlist-based airport alternatives. Require credentials and stop before exceeding configured limits.
+Added the SerpApi adapter and one-way search path, provenance, durable quota ledger, normalization, and bounded airport alternatives. The local environment has no provider credentials and all request caps remain zero; the API correctly refuses live calls until configured. Tests use isolated fixtures and mocked provider transport only. See [stage-3.md](stage-3.md).
 
 ## Stage 4 — Maps and ground transfers
 

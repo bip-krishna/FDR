@@ -1,6 +1,6 @@
 # API access and integration feasibility
 
-Checked against provider documentation on 2026-10-24. Access, quotas, product terms, and prices can change; reconfirm before each integration stage. This document records documented requirements, not account-specific approval.
+Checked against provider documentation on 2026-10-25. Access, quotas, product terms, and prices can change; reconfirm before each integration stage. This document records documented requirements, not account-specific approval.
 
 ## Provider matrix
 
