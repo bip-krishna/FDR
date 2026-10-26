@@ -21,6 +21,10 @@ from .usage import finish_search_call, provider_readiness, reserve_search_call
 from .usage import reserve_google_maps_call
 from .google_maps import MapsProviderError, compute_route, fingerprint, geocode
 from .journeys import calculate_door_to_door_timing
+from .rail import (
+    IRCTC_URL, NTES_URL, STATION_RETRIEVED_ON, STATION_SOURCE, STATION_SOURCE_URL,
+    Station, find_stations,
+)
 
 SOURCE = "OurAirports"
 DATASET_RETRIEVED_ON = date(2026, 10, 24)
@@ -560,3 +564,74 @@ def nearby_airports(
     nearby.sort(key=lambda pair: (pair[0], pair[1].name.casefold()))
     results = [as_record(airport, round(distance, 2)) for distance, airport in nearby[:limit]]
     return AirportResults(results=results, total=len(results))
+
+
+@app.get("/api/rail/status")
+def rail_provider_status():
+    return {
+        "provider": "Indian Railways / IRCTC",
+        "status": "unavailable",
+        "reason": "no_authorized_live_provider",
+        "message": "Live train schedules, fares, and seat availability require an approved provider connection.",
+        "station_reference": {
+            "source": STATION_SOURCE,
+            "source_url": STATION_SOURCE_URL,
+            "retrieved_on": STATION_RETRIEVED_ON.isoformat(),
+        },
+        "official_enquiry": {"ntes": NTES_URL, "irctc": IRCTC_URL},
+        "live_requests_enabled": False,
+    }
+
+
+@app.get("/api/rail/stations")
+def search_rail_stations(q: str = Query(min_length=2, max_length=100), limit: int = Query(default=10, ge=1, le=25)):
+    term = q.strip()
+    if len(term) < 2:
+        raise HTTPException(422, "Station search must contain at least two non-space characters.")
+    results = find_stations(term, limit)
+    return {
+        "results": [station.__dict__ | {"retrieved_on": station.retrieved_on.isoformat()} for station in results],
+        "total": len(results),
+        "source": STATION_SOURCE,
+        "source_url": STATION_SOURCE_URL,
+        "retrieved_on": STATION_RETRIEVED_ON.isoformat(),
+    }
+
+
+class RailSearchRequest(BaseModel):
+    origin_code: str = Field(pattern=r"^[A-Za-z0-9]{2,7}$")
+    destination_code: str = Field(pattern=r"^[A-Za-z0-9]{2,7}$")
+    journey_date: date
+
+
+@app.post("/api/rail/search")
+def search_rail_journeys(request: RailSearchRequest):
+    origin_code = request.origin_code.upper()
+    destination_code = request.destination_code.upper()
+    # Exact route validation uses the complete official reference, not a guessed code.
+    from .rail import load_stations
+    all_stations = {station.code: station for station in load_stations()}
+    origin = all_stations.get(origin_code)
+    destination = all_stations.get(destination_code)
+    if origin is None or destination is None:
+        raise HTTPException(404, "Choose origin and destination from the Indian Railways station list.")
+    if origin_code == destination_code:
+        raise HTTPException(422, "Origin and destination stations must be different.")
+    if request.journey_date < date.today():
+        raise HTTPException(422, "Journey date cannot be in the past.")
+    return {
+        "status": "unavailable",
+        "reason": "no_authorized_live_provider",
+        "message": "FDR cannot retrieve a current train schedule for this route yet. Check the official railway enquiry before planning around a train.",
+        "origin": {"name": origin.name, "code": origin.code},
+        "destination": {"name": destination.name, "code": destination.code},
+        "journey_date": request.journey_date.isoformat(),
+        "results": [],
+        "availability": "unavailable",
+        "fare": "unavailable",
+        "retrieved_at": None,
+        "fallbacks": [
+            {"name": "National Train Enquiry System (NTES)", "url": NTES_URL},
+            {"name": "IRCTC train search and availability", "url": IRCTC_URL},
+        ],
+    }

@@ -29,9 +29,9 @@ Added deliberate Geocoding and traffic-aware Routes requests, separate SKU estim
 
 Added bounded on-demand airport access estimates, time-zone conversion, door-to-door elapsed-time estimates, four ranking modes, known/unknown cost disclosure, risks, sources, and booking links. Google calls remain disabled until key, quotas, and costs are configured. See [stage-5.md](stage-5.md).
 
-## Stage 6 — Rail integration
+## Stage 6 — Rail integration (implemented; live schedule access unavailable)
 
-Verify an authorized provider and its production access; otherwise provide official enquiry links and explicit unavailable seat status. No unauthorized scraping.
+Added official 2026 station discovery, the provider contract and normalized segment shape, route validation, explicit unavailable states, and NTES/IRCTC fallbacks. Current route schedules, fares, and inventory are not available without IRCTC approval and costly TIES commitments; no unofficial scraping is used. See [stage-6.md](stage-6.md).
 
 ## Stage 7 — Multimodal optimization
 

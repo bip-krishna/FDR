@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bookmark, Compass, PlaneTakeoff, Settings2, Route } from "lucide-react";
+import { Bookmark, Compass, PlaneTakeoff, Settings2, Route, TrainFront } from "lucide-react";
 
 const links = [
   { href: "/", label: "Search journeys", icon: PlaneTakeoff },
+  { href: "/rail", label: "Rail explorer", icon: TrainFront },
   { href: "/saved", label: "Saved journeys", icon: Bookmark },
   { href: "/layovers", label: "Layover explorer", icon: Compass },
   { href: "/settings", label: "Settings & status", icon: Settings2 },
@@ -14,6 +15,7 @@ const links = [
 const pageNames: Record<string, string> = {
   "/": "Search journeys",
   "/results": "Journey results",
+  "/rail": "Rail explorer",
   "/saved": "Saved journeys",
   "/layovers": "Layover explorer",
   "/settings": "Settings & status",

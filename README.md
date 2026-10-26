@@ -12,7 +12,7 @@ A production-minded travel planning platform for comparing door-to-door journeys
 
 ## Project status
 
-**Current stage: Stage 5 — end-to-end flight optimization.** Flight offers can be ranked, and users can request quota-guarded airport access estimates for selected itineraries. SerpApi and Google Maps remain disabled until credentials, account-specific caps, and cost estimates are configured.
+**Current stage: Stage 6 — Indian Railways integration.** FDR includes station discovery from the official 2026 station-code index and a Rail Explorer with official NTES/IRCTC fallbacks. Live train schedules, fares, and seat availability remain unavailable because IRCTC access requires approval and costly commitments; no unofficial scraping is used.
 
 ## Planned structure
 
@@ -39,6 +39,7 @@ Open `http://localhost:3000`. Run `npm run test` for validation unit tests, `npm
 Stage 1 checks are in [docs/stage-1.md](docs/stage-1.md). Stage 2 setup and API details are in [docs/stage-2.md](docs/stage-2.md).
 Stage 4 route and provider controls are in [docs/stage-4.md](docs/stage-4.md).
 Stage 5 itinerary ranking and access estimates are in [docs/stage-5.md](docs/stage-5.md).
+Stage 6 station discovery, provider access research, costs, and limitations are in [docs/stage-6.md](docs/stage-6.md).
 
 ## Run the backend
 
@@ -64,4 +65,4 @@ This project is intended to be hosted when deployment is reached. Keep configura
 
 ## Staged delivery
 
-See [docs/roadmap.md](docs/roadmap.md). The source plan requires one stage at a time and a stop for user direction after each stage. Stages 1–5 are implemented; the next stage is Indian Railways integration.
+See [docs/roadmap.md](docs/roadmap.md). The source plan requires one stage at a time and a stop for user direction after each stage. Stages 1–6 have been implemented to the extent permitted by available authorized data sources; Stage 6 live train routes remain unavailable pending a permitted provider connection.

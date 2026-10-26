@@ -277,6 +277,32 @@ a { color: inherit; text-decoration: none; }
 .secondary-panel p { max-width: 620px; margin: 0; color: #737373; font-size: 12px; line-height: 1.65; }
 .integration-line { display: flex; align-items: center; gap: 9px; margin-top: 18px; padding: 12px 13px; border: 1px solid var(--border); border-radius: 6px; color: #5f5f5f; font-size: 11px; }
 .integration-line .provider-dot { margin: 0; }
+.rail-page { max-width: 900px; }
+.rail-search-panel { margin-top: 28px; overflow: visible; }
+.rail-station-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.rail-station-field { position: relative; }
+.rail-input-wrap { position: relative; }
+.rail-input-wrap .field-input { padding-left: 39px; }
+.rail-suggestions { position: absolute; z-index: 10; inset: calc(100% + 4px) 0 auto; max-height: 260px; overflow: auto; margin: 0; padding: 5px; list-style: none; border: 1px solid var(--border); border-radius: 7px; background: white; box-shadow: 0 8px 20px rgba(0,0,0,.09); }
+.rail-suggestions button { display: flex; width: 100%; min-height: 38px; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 9px; border: 0; border-radius: 4px; background: transparent; text-align: left; font-size: 12px; }
+.rail-suggestions button:hover, .rail-suggestions button:focus-visible { outline: none; background: #fff8db; }
+.rail-suggestions code { color: #6c6c6c; font-size: 10px; }
+.rail-date-field { max-width: 320px; margin-top: 18px; }
+.rail-result-panel { margin-top: 18px; padding: 22px; }
+.rail-result-heading { display: flex; align-items: center; gap: 12px; }
+.rail-result-heading h2 { margin: 5px 0 0; font-size: 17px; letter-spacing: -.025em; }
+.rail-result-icon { display: grid; width: 40px; height: 40px; flex: none; place-items: center; border-radius: 7px; background: var(--yellow); }
+.rail-result-panel > p { max-width: 650px; color: #666; font-size: 12px; line-height: 1.6; }
+.rail-unknowns { display: grid; grid-template-columns: repeat(3, 1fr); gap: 9px; margin-top: 18px; }
+.rail-unknowns span { display: grid; gap: 4px; padding: 11px; border: 1px solid var(--border); border-radius: 6px; color: #777; font-size: 11px; }
+.rail-unknowns strong { color: #333; font-size: 10px; }
+.rail-fallbacks { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 17px; }
+.rail-fallbacks a { display: inline-flex; min-height: 36px; align-items: center; gap: 7px; padding: 0 11px; border: 1px solid var(--border); border-radius: 5px; background: white; font-size: 11px; font-weight: 600; }
+.rail-fallbacks a:hover { border-color: #c7a500; background: #fffbed; }
+.rail-provider-note { display: flex; gap: 10px; margin-top: 16px; padding: 14px; border: 1px solid var(--border); border-radius: 7px; background: #fff; }
+.rail-provider-note .provider-dot { flex: none; margin-top: 5px; }
+.rail-provider-note strong { font-size: 11px; }
+.rail-provider-note p { margin: 4px 0 0; color: #707070; font-size: 11px; line-height: 1.6; }
 
 @media (max-width: 1100px) {
   .sidebar { width: 220px; }
@@ -287,6 +313,12 @@ a { color: inherit; text-decoration: none; }
   .side-stack { grid-template-columns: repeat(2, minmax(0,1fr)); }
   .results-grid { grid-template-columns: minmax(0,1fr); }
   .flight-card { padding: 14px; }
+}
+
+@media (max-width: 600px) {
+  .rail-station-grid, .rail-unknowns { grid-template-columns: minmax(0, 1fr); }
+  .rail-date-field { max-width: none; }
+  .rail-result-heading { align-items: flex-start; }
 }
 @media (max-width: 760px) {
   .sidebar { position: relative; width: 100%; height: auto; border-right: 0; border-bottom: 1px solid var(--border); }
