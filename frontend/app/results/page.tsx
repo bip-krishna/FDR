@@ -5,8 +5,9 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { AlertCircle, ArrowLeft, ArrowRight, CalendarDays, Clock3, MapPin, Users, Plane, ExternalLink } from "lucide-react";
 import { AppShell, PageIntro } from "../components/app-shell";
-import { FlightOffer, FlightSearchResponse, GroundAccessEstimate, TransferEstimate, estimateGroundAccess, estimateTransfer, searchFlights } from "../../lib/flight-api";
+import { FlightOffer, FlightSearchResponse, GroundAccessEstimate, OptimizationResponse, TransferEstimate, estimateGroundAccess, estimateTransfer, optimizeJourneys, searchFlights } from "../../lib/flight-api";
 import { JourneyRanking, rankJourneyOffers, journeyRankingNote } from "../../lib/journey-ranking";
+import { buildOptimizationSegments } from "../../lib/multimodal-routing";
 
 type SearchDetails = {
   origin: string;
@@ -209,6 +210,9 @@ function ResultsContent() {
                           accessPending={groundAccessPending[key] ?? false} onEstimateAccess={() => requestGroundAccess(offer)} />;
                       })}
                     </div>
+                    <RouteOptimizationPanel apiBaseUrl={apiBaseUrl} offers={flightResponse.results}
+                      accessByOffer={scopedAccess} origin={details.origin} destination={details.destination}
+                      includeRail={details.includeRail} />
                   </>
                 ) : (
                   <div className="empty-results results-empty"><span className="empty-icon"><AlertCircle aria-hidden="true" /></span><div>
@@ -244,6 +248,59 @@ function ResultsContent() {
       </main>
     </AppShell>
   );
+}
+
+function RouteOptimizationPanel({ apiBaseUrl, offers, accessByOffer, origin, destination, includeRail }: {
+  apiBaseUrl?: string; offers: FlightOffer[]; accessByOffer: Record<string, GroundAccessEstimate | undefined>;
+  origin: string; destination: string; includeRail: boolean;
+}) {
+  const [state, setState] = useState<{ loading: boolean; result?: OptimizationResponse; error?: string }>({ loading: false });
+  const segments = buildOptimizationSegments(offers, accessByOffer, origin, destination);
+  const readyOffers = new Set(segments.filter((segment) => segment.mode === "flight").map((segment) => segment.ticket_group_id)).size;
+
+  async function optimize() {
+    if (!apiBaseUrl || !segments.length) return;
+    setState({ loading: true });
+    try {
+      const result = await optimizeJourneys(apiBaseUrl, { origin: `city:${origin.trim().toLocaleLowerCase("en")}`,
+        destination: `city:${destination.trim().toLocaleLowerCase("en")}`, segments });
+      setState({ loading: false, result });
+    } catch (error) {
+      setState({ loading: false, error: error instanceof Error ? error.message : "Route optimization is unavailable." });
+    }
+  }
+
+  return <section className="multimodal-panel" aria-labelledby="multimodal-heading">
+    <div className="multimodal-panel-head"><div><span className="page-eyebrow">Stage 7 · time-dependent graph</span>
+      <h3 id="multimodal-heading">Build door-to-door route options</h3></div>
+      <span className="stage-label">{segments.length} candidate segments</span>
+    </div>
+    <p>Connect flight offers with the airport-access estimates you request above. The optimizer checks chronology, transfer buffers, fare completeness, separate-ticket risks, and Pareto efficiency. It makes no travel-provider calls.</p>
+    {includeRail && <p className="multimodal-rail-note">Train schedules are not available in FDR yet. <Link href="/rail">Check the official rail enquiry links <ArrowRight size={13} aria-hidden="true" /></Link></p>}
+    <div className="multimodal-action-row">
+      <span>{readyOffers ? `${readyOffers} flight offer${readyOffers === 1 ? "" : "s"} have both ground legs estimated.` : "Estimate airport access for at least one flight above to build a complete path."}</span>
+      <button className="search-button" type="button" onClick={optimize} disabled={!apiBaseUrl || !segments.length || state.loading}>
+        {state.loading ? "Evaluating…" : "Evaluate connections"}
+      </button>
+    </div>
+    {state.error && <div className="error-banner" role="alert">{state.error}</div>}
+    {state.result && (state.result.routes.length ? <div className="optimized-routes" aria-live="polite">
+      <p className="journey-ranking-note">{state.result.message} {state.result.pareto_routes} Pareto-efficient route{state.result.pareto_routes === 1 ? "" : "s"} identified.</p>
+      {state.result.routes.map((route) => <article className="optimized-route" key={route.segment_ids.join("-")}>
+        <div className="optimized-route-head"><div><strong>{route.duration_minutes} min door to door</strong><span>{route.pareto_efficient ? "Efficient option" : "Alternative"}</span></div>
+          <div className="optimized-fare">{route.fare_complete && route.fare_amount ? `${route.currency} ${Number(route.fare_amount).toLocaleString("en-IN")}` : route.known_fare_amount && route.known_fare_currency ? `Known fares ${route.known_fare_currency} ${Number(route.known_fare_amount).toLocaleString("en-IN")}` : "Fare unavailable"}<small>{route.fare_complete ? "Comparable total fare" : "Transfer costs or currency are incomplete"}</small></div>
+        </div>
+        <ol className="optimized-segments">{route.segments.map((segment) => <li key={segment.id}>
+          <span className={`segment-mode segment-mode-${segment.mode}`}>{segment.mode}</span>
+          <span className="optimized-segment-route">{segment.origin.replace(/^(city|airport|station):/, "")} → {segment.destination.replace(/^(city|airport|station):/, "")}</span>
+          <span className="optimized-segment-time">{new Date(segment.departure_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })} – {new Date(segment.arrival_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}</span>
+        </li>)}</ol>
+        <ul className="optimized-risks">{route.risks.map((risk) => <li key={risk}>{risk}</li>)}</ul>
+        <div className="optimized-links">{route.segments.filter((segment) => segment.booking_url?.startsWith("https://")).map((segment) => <a key={segment.id} href={segment.booking_url ?? undefined} target="_blank" rel="noreferrer">Check provider option <ExternalLink size={13} aria-hidden="true" /></a>)}</div>
+      </article>)}
+      {state.result.search_truncated && <p className="coverage-foot">The route search reached its configured exploration limit; this list may omit additional paths.</p>}
+    </div> : <div className="empty-results" role="status"><span className="empty-icon"><AlertCircle aria-hidden="true" /></span><div><h4>No feasible time-ordered route</h4><p>Available segments could not be connected while meeting their transfer buffers. No unsupported connection was shown.</p></div></div>)}
+  </section>;
 }
 
 function TransferExplorer({ apiBaseUrl, details }: {

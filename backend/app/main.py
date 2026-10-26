@@ -1,11 +1,13 @@
 import math
 from contextlib import asynccontextmanager
 from datetime import date, datetime, timedelta, timezone
+from decimal import Decimal
+from typing import Literal
 
 import httpx
 from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
@@ -15,12 +17,14 @@ from .models import Airport
 from .flights import (
     FlightSearchRequest, FlightSearchResponse, airport_candidates, airport_pair_shortlist, expand_nearby_airports,
     normalize_response, params_for_search, request_fingerprint, search_serpapi, ProviderError,
+    attach_utc_schedule_times,
 )
 from .settings import get_settings
 from .usage import finish_search_call, provider_readiness, reserve_search_call
 from .usage import reserve_google_maps_call
 from .google_maps import MapsProviderError, compute_route, fingerprint, geocode
 from .journeys import calculate_door_to_door_timing
+from .multimodal import TravelSegment, optimize_itineraries
 from .rail import (
     IRCTC_URL, NTES_URL, STATION_RETRIEVED_ON, STATION_SOURCE, STATION_SOURCE_URL,
     Station, find_stations,
@@ -87,6 +91,44 @@ class GroundAccessRequest(BaseModel):
     departure_local_time: str = Field(min_length=10, max_length=40)
     arrival_local_time: str = Field(min_length=10, max_length=40)
     flight_duration_minutes: int = Field(ge=1, le=2880)
+
+
+class JourneySegmentInput(BaseModel):
+    segment_id: str = Field(min_length=1, max_length=120)
+    mode: Literal["flight", "train", "ground"]
+    origin: str = Field(min_length=1, max_length=160)
+    destination: str = Field(min_length=1, max_length=160)
+    departure_at: datetime
+    arrival_at: datetime
+    provider: str = Field(min_length=1, max_length=120)
+    data_status: Literal["live", "cached", "estimated", "static"]
+    estimate_departure_at: datetime | None = None
+    fare_amount: Decimal | None = Field(default=None, ge=0)
+    currency: str | None = Field(default=None, pattern=r"^[A-Za-z]{3}$")
+    ticket_group_id: str | None = Field(default=None, max_length=120)
+    booking_url: str | None = Field(default=None, max_length=2000)
+
+    @model_validator(mode="after")
+    def validate_times_and_fare(self):
+        if self.departure_at.tzinfo is None or self.arrival_at.tzinfo is None:
+            raise ValueError("Segment schedule times must include UTC offsets.")
+        if self.arrival_at <= self.departure_at:
+            raise ValueError("Segment arrival must be after departure.")
+        if self.fare_amount is not None and not self.currency:
+            raise ValueError("A segment fare must include its currency.")
+        if self.origin.casefold() == self.destination.casefold():
+            raise ValueError("A segment must connect two different points.")
+        if self.booking_url and not self.booking_url.startswith("https://"):
+            raise ValueError("Booking links must use HTTPS.")
+        return self
+
+
+class JourneyOptimizeRequest(BaseModel):
+    origin: str = Field(min_length=1, max_length=160)
+    destination: str = Field(min_length=1, max_length=160)
+    segments: list[JourneySegmentInput] = Field(max_length=120)
+    max_segments_per_route: int = Field(default=5, ge=1, le=8)
+    max_routes: int = Field(default=25, ge=1, le=100)
 
 
 def get_session():
@@ -330,6 +372,27 @@ def eligible(airport: Airport) -> bool:
     return airport.type in ELIGIBLE_TYPES and airport.scheduled_service is True
 
 
+def enrich_offer_timestamps(offers, session: Session) -> None:
+    codes = {code.upper() for offer in offers for segment in offer.segments
+             for code in (segment.departure_code, segment.arrival_code) if code}
+    if not codes:
+        return
+    try:
+        from timezonefinder import timezone_at
+        airport_rows = session.scalars(select(Airport).where(Airport.iata_code.in_(codes))).all()
+        zones = {}
+        for airport in airport_rows:
+            if airport.latitude_deg is None or airport.longitude_deg is None or not airport.iata_code:
+                continue
+            zone = timezone_at(lng=airport.longitude_deg, lat=airport.latitude_deg)
+            if zone:
+                zones[airport.iata_code.upper()] = zone
+        attach_utc_schedule_times(offers, zones)
+    except (ImportError, ValueError, TypeError):
+        # Local provider times remain visible, but routes needing UTC chronology cannot use these offers.
+        return
+
+
 def as_record(airport: Airport, distance_km: float | None = None) -> AirportRecord:
     is_eligible = eligible(airport)
     if airport.scheduled_service is True:
@@ -444,6 +507,7 @@ async def search_flights(request: FlightSearchRequest, session: Session = Depend
             payload = await search_serpapi(params, settings.serpapi_key, settings.request_timeout_seconds)
             retrieved_at = datetime.now(timezone.utc)
             offers, cached = normalize_response(payload, request, origin, destination, retrieved_at)
+            enrich_offer_timestamps(offers, session)
             results.extend(offers)
             any_cached = any_cached or cached
             finish_search_call(session, reservation, "cached" if cached else "success")
@@ -635,3 +699,22 @@ def search_rail_journeys(request: RailSearchRequest):
             {"name": "IRCTC train search and availability", "url": IRCTC_URL},
         ],
     }
+
+
+@app.post("/api/journeys/optimize")
+def optimize_journey_options(request: JourneyOptimizeRequest):
+    segments = [TravelSegment(
+        segment_id=item.segment_id, mode=item.mode, origin=item.origin, destination=item.destination,
+        departure_at=item.departure_at, arrival_at=item.arrival_at, provider=item.provider,
+        data_status=item.data_status, estimate_departure_at=item.estimate_departure_at,
+        fare_amount=item.fare_amount,
+        currency=item.currency.upper() if item.currency else None,
+        ticket_group_id=item.ticket_group_id, booking_url=item.booking_url,
+    ) for item in request.segments]
+    try:
+        return optimize_itineraries(
+            request.origin, request.destination, segments,
+            max_segments_per_route=request.max_segments_per_route, max_routes=request.max_routes,
+        )
+    except ValueError as error:
+        raise HTTPException(422, str(error)) from error

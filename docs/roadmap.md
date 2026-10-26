@@ -33,9 +33,9 @@ Added bounded on-demand airport access estimates, time-zone conversion, door-to-
 
 Added official 2026 station discovery, the provider contract and normalized segment shape, route validation, explicit unavailable states, and NTES/IRCTC fallbacks. Current route schedules, fares, and inventory are not available without IRCTC approval and costly TIES commitments; no unofficial scraping is used. See [stage-6.md](stage-6.md).
 
-## Stage 7 — Multimodal optimization
+## Stage 7 — Multimodal optimization (implemented; feed coverage limited)
 
-Combine verified flight, rail, and ground adapters in a time-dependent bounded search with transfer and self-transfer risk.
+Added a bounded time-dependent graph, UTC flight timestamps, transfer buffers, Pareto handling, route risks, and an explicit optimizer action from assessed flight offers and ground-access estimates. The engine accepts train/ground edges, but no train feed or intermediate airport/station transfer estimate is connected, so production routes use flight offers and outer airport-access legs only. Ground fares remain unknown. See [stage-7.md](stage-7.md).
 
 ## Stage 8 — Deterministic Layover Explorer
 

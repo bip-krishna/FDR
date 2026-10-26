@@ -14,9 +14,11 @@ export type FlightSegment = {
   departure_airport: string | null;
   departure_code: string | null;
   departure_local_time: string | null;
+  departure_at_utc?: string | null;
   arrival_airport: string | null;
   arrival_code: string | null;
   arrival_local_time: string | null;
+  arrival_at_utc?: string | null;
   duration_minutes: number | null;
   aircraft: string | null;
   travel_class: string | null;
@@ -82,7 +84,7 @@ export type GroundAccessEstimate = {
   status: "ready" | "infeasible" | "partial" | "unavailable" | "blocked" | "error";
   reason?: string;
   message?: string;
-  legs?: { kind: string; distance_meters: number; duration_seconds: number; static_duration_seconds: number; encoded_polyline: string; retrieved_at: string; traffic_mode?: "current_traffic" | "future_prediction" }[];
+  legs?: { kind: string; distance_meters: number; duration_seconds: number; static_duration_seconds: number; encoded_polyline: string; retrieved_at: string; departure_time?: string; provider?: string; traffic_mode?: "current_traffic" | "future_prediction" }[];
   origin_ground_minutes?: number;
   destination_ground_minutes?: number;
   airport_checkin_buffer_minutes?: number;
@@ -140,4 +142,61 @@ export async function estimateGroundAccess(apiBaseUrl: string, input: {
   });
   if (!response.ok) throw new Error("The ground access estimate could not be completed.");
   return response.json() as Promise<GroundAccessEstimate>;
+}
+
+export type OptimizationSegment = {
+  segment_id: string;
+  mode: "flight" | "train" | "ground";
+  origin: string;
+  destination: string;
+  departure_at: string;
+  arrival_at: string;
+  provider: string;
+  data_status: "live" | "cached" | "estimated" | "static";
+  estimate_departure_at?: string | null;
+  fare_amount: number | null;
+  currency: string | null;
+  ticket_group_id: string | null;
+  booking_url: string | null;
+};
+
+export type OptimizedRoute = {
+  segment_ids: string[];
+  segments: (Omit<OptimizationSegment, "fare_amount"> & { id: string; fare_amount: string | null })[];
+  departure_at: string;
+  arrival_at: string;
+  duration_minutes: number;
+  fare_amount: string | null;
+  known_fare_amount: string | null;
+  known_fare_currency: string | null;
+  currency: string | null;
+  fare_complete: boolean;
+  confirmed_bookable: false;
+  pareto_efficient: boolean;
+  risks: string[];
+};
+
+export type OptimizationResponse = {
+  status: "ready" | "unavailable";
+  reason: string | null;
+  message: string;
+  origin: string;
+  destination: string;
+  routes: OptimizedRoute[];
+  routes_considered: number;
+  pareto_routes: number;
+  search_truncated: boolean;
+  search_states_expanded: number;
+};
+
+export async function optimizeJourneys(apiBaseUrl: string, input: {
+  origin: string; destination: string; segments: OptimizationSegment[];
+}): Promise<OptimizationResponse> {
+  const response = await fetch(`${apiBaseUrl.replace(/\/$/, "")}/api/journeys/optimize`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  const payload = await response.json();
+  if (!response.ok) throw new Error(typeof payload.detail === "string" ? payload.detail : "Journey optimization could not be completed.");
+  return payload as OptimizationResponse;
 }

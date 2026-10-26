@@ -5,7 +5,8 @@ import httpx
 import pytest
 
 from app.flights import (
-    FlightSearchRequest, ProviderError, normalize_response, params_for_search, search_serpapi,
+    FlightOffer, FlightSegment, FlightSearchRequest, ProviderError, attach_utc_schedule_times,
+    normalize_response, params_for_search, search_serpapi,
 )
 from app.models import Airport
 from app.settings import Settings
@@ -55,6 +56,24 @@ def test_normalizer_preserves_missing_price_and_marks_older_provider_results_cac
     assert offers[0].price is None
     assert offers[0].currency == "INR"
     assert offers[0].segments[0].departure_local_time == "2030-01-02 08:00"
+    attach_utc_schedule_times(offers, {"DEL": "Asia/Kolkata", "BOM": "Asia/Kolkata"})
+    assert offers[0].segments[0].departure_at_utc.isoformat() == "2030-01-02T02:30:00+00:00"
+    assert offers[0].segments[0].arrival_at_utc.isoformat() == "2030-01-02T03:30:00+00:00"
+
+
+def test_timezone_conversion_omits_ambiguous_or_nonexistent_dst_times():
+    request = FlightSearchRequest(origin="DEL", destination="BOM", departure_date=date.today() + timedelta(days=14))
+    offer = FlightOffer(id="dst", searched_origin="A", searched_destination="B", origin_airport="A", origin_code="NYC",
+        destination_airport="B", destination_code="NYC", segments=[FlightSegment(
+            departure_code="NYC", arrival_code="NYC", departure_local_time="2027-11-07 01:30",
+            arrival_local_time="2027-11-07 02:30")], stops=0, layovers=[], total_duration_minutes=60,
+        price=None, currency="INR", airlines=[], booking_url=None, status="live", retrieved_at=datetime.now(timezone.utc))
+    attach_utc_schedule_times([offer], {"NYC": "America/New_York"})
+    assert offer.segments[0].departure_at_utc is None
+    assert offer.segments[0].arrival_at_utc.isoformat() == "2027-11-07T07:30:00+00:00"
+    offer.segments[0].departure_local_time = "2027-03-14 02:30"
+    attach_utc_schedule_times([offer], {"NYC": "America/New_York"})
+    assert offer.segments[0].departure_at_utc is None
 
 
 def test_http_adapter_uses_secure_provider_key_parameter_and_maps_rate_limits():

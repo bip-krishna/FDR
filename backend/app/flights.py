@@ -2,7 +2,8 @@ import hashlib
 import math
 import re
 from datetime import date, datetime, timezone
-from typing import Any, Literal
+from typing import Any, Literal, Mapping
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import httpx
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -53,9 +54,11 @@ class FlightSegment(BaseModel):
     departure_airport: str | None = None
     departure_code: str | None = None
     departure_local_time: str | None = None
+    departure_at_utc: datetime | None = None
     arrival_airport: str | None = None
     arrival_code: str | None = None
     arrival_local_time: str | None = None
+    arrival_at_utc: datetime | None = None
     duration_minutes: int | None = None
     aircraft: str | None = None
     travel_class: str | None = None
@@ -96,6 +99,32 @@ class FlightSearchResponse(BaseModel):
     calls_allowed: int = 0
     source: str = "SerpApi Google Flights"
     retrieved_at: datetime | None = None
+
+
+def attach_utc_schedule_times(offers: list[FlightOffer], airport_timezones: Mapping[str, str]) -> None:
+    """Add UTC instants only when the airport-local schedule time is unambiguous."""
+    def to_utc(local_value: str | None, code: str | None) -> datetime | None:
+        if not local_value or not code or code.upper() not in airport_timezones:
+            return None
+        try:
+            parsed = datetime.fromisoformat(local_value.replace("Z", "+00:00"))
+            if parsed.tzinfo is not None:
+                return parsed.astimezone(timezone.utc)
+            zone = ZoneInfo(airport_timezones[code.upper()])
+        except (ValueError, ZoneInfoNotFoundError):
+            return None
+        candidates = [parsed.replace(tzinfo=zone, fold=fold) for fold in (0, 1)]
+        valid = [candidate for candidate in candidates
+                 if candidate.astimezone(timezone.utc).astimezone(zone).replace(tzinfo=None) == parsed]
+        distinct = {candidate.astimezone(timezone.utc) for candidate in valid}
+        if len(distinct) != 1:
+            return None
+        return next(iter(distinct))
+
+    for offer in offers:
+        for segment in offer.segments:
+            segment.departure_at_utc = to_utc(segment.departure_local_time, segment.departure_code)
+            segment.arrival_at_utc = to_utc(segment.arrival_local_time, segment.arrival_code)
 
 
 def airport_candidates(session, query: str, max_candidates: int = 3) -> list[Airport]:
