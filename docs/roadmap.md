@@ -37,13 +37,13 @@ Added official 2026 station discovery, the provider contract and normalized segm
 
 Added a bounded time-dependent graph, UTC flight timestamps, transfer buffers, Pareto handling, route risks, and an explicit optimizer action from assessed flight offers and ground-access estimates. The engine accepts train/ground edges, but no train feed or intermediate airport/station transfer estimate is connected, so production routes use flight offers and outer airport-access legs only. Ground fares remain unknown. See [stage-7.md](stage-7.md).
 
-## Stage 8 — Deterministic Layover Explorer
+## Stage 8 — Deterministic Layover Explorer (core implemented; provider integration pending)
 
-Calculate conservative usable windows, return buffers, and verified place feasibility; unknown exit/immigration eligibility remains unverified.
+Added timezone-aware layover duration and conservative exploration-window calculations, a configurable airport return deadline, exit/baggage warnings, and a screen for manual connection times. Unknown exit/immigration eligibility never authorizes leaving. Google Places discovery, traffic-aware attraction feasibility, and weather are explicitly unavailable until their providers and per-SKU cost/request guards are configured. See [stage-8.md](stage-8.md). Stage 8 acceptance criteria are not yet complete.
 
-## Stage 9 — Optional Groq assistance
+## Stage 9 — Optional Groq assistance (guarded integration implemented; end-to-end pending)
 
-Call only after user action, on verified candidates, validate structured output, and re-check safety constraints deterministically.
+Added a user-triggered Groq adapter with strict structured output, a candidate-ID-only response contract, backend revalidation, and daily/monthly/per-layover cost guards. The public planner refuses to accept browser-supplied candidate facts and returns before calling Groq because Stage 8 has no verified Places + Routes feed yet. Stage 9 acceptance is not complete. See [stage-9.md](stage-9.md).
 
 ## Stage 10 — Personal-use improvements
 

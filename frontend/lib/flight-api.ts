@@ -200,3 +200,65 @@ export async function optimizeJourneys(apiBaseUrl: string, input: {
   if (!response.ok) throw new Error(typeof payload.detail === "string" ? payload.detail : "Journey optimization could not be completed.");
   return payload as OptimizationResponse;
 }
+
+export type LayoverEvaluation = {
+  status: "ready";
+  layover_minutes: number;
+  long_layover: boolean;
+  exploration_eligible_by_duration: boolean;
+  exit_eligibility: "verified_yes" | "verified_no" | "unknown";
+  airport_exit_authorized: false;
+  exploration_start_at: string;
+  latest_recommended_airport_return_at: string;
+  available_exploration_minutes: number;
+  airport_return_buffer_minutes: number;
+  terminal_transfer_buffer_minutes: number;
+  weather_status: string;
+  route_traffic_status: string;
+  places_status: string;
+  warnings: string[];
+  feasible_candidates: { place_id: string; name: string }[];
+  rejected_candidates: { place_id: string; name: string; reason: string }[];
+  places_message: string;
+  route_message: string;
+  weather_message: string;
+  disclaimer: string;
+};
+
+export async function evaluateLayover(apiBaseUrl: string, input: {
+  arrival_at: string; departure_at: string;
+  exit_eligibility: "verified_yes" | "verified_no" | "unknown";
+  baggage_recheck_required: boolean;
+}): Promise<LayoverEvaluation> {
+  const response = await fetch(`${apiBaseUrl.replace(/\/$/, "")}/api/layovers/evaluate`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input),
+  });
+  const payload = await response.json();
+  if (!response.ok) throw new Error(typeof payload.detail === "string" ? payload.detail : "Layover evaluation could not be completed.");
+  return payload as LayoverEvaluation;
+}
+
+export type LayoverPlanResult = {
+  status: "ready" | "unavailable" | "blocked" | "rejected" | "error";
+  reason?: string;
+  message?: string;
+  groq_called: boolean;
+  places?: { candidate_id: string; name: string; source: string; source_status: string;
+    arrive_place_at: string; finish_visit_at: string; return_to_airport_at: string;
+    known_cost_amount: number | null; known_cost_currency: string | null; explanation: string }[];
+  warnings?: string[];
+  latest_recommended_airport_return_at?: string;
+  disclaimer?: string;
+};
+
+export async function planLayover(apiBaseUrl: string, input: {
+  arrival_at: string; departure_at: string; exit_eligibility: "verified_yes" | "verified_no" | "unknown";
+  baggage_recheck_required: boolean; disclaimer_acknowledged: boolean; interests: string[];
+}): Promise<LayoverPlanResult> {
+  const response = await fetch(`${apiBaseUrl.replace(/\/$/, "")}/api/layovers/plan`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input),
+  });
+  const payload = await response.json();
+  if (!response.ok) throw new Error(typeof payload.detail === "string" ? payload.detail : "Layover planning could not be completed.");
+  return payload as LayoverPlanResult;
+}

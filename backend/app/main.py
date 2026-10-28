@@ -21,10 +21,12 @@ from .flights import (
 )
 from .settings import get_settings
 from .usage import finish_search_call, provider_readiness, reserve_search_call
-from .usage import reserve_google_maps_call
+from .usage import reserve_google_maps_call, reserve_groq_layover_call
 from .google_maps import MapsProviderError, compute_route, fingerprint, geocode
 from .journeys import calculate_door_to_door_timing
 from .multimodal import TravelSegment, optimize_itineraries
+from .layovers import evaluate_layover
+from .groq_layover import LayoverPlanRequest, plan_with_verified_candidates
 from .rail import (
     IRCTC_URL, NTES_URL, STATION_RETRIEVED_ON, STATION_SOURCE, STATION_SOURCE_URL,
     Station, find_stations,
@@ -120,6 +122,23 @@ class JourneySegmentInput(BaseModel):
             raise ValueError("A segment must connect two different points.")
         if self.booking_url and not self.booking_url.startswith("https://"):
             raise ValueError("Booking links must use HTTPS.")
+        return self
+
+
+class LayoverEvaluateRequest(BaseModel):
+    arrival_at: datetime
+    departure_at: datetime
+    exit_eligibility: Literal["verified_yes", "verified_no", "unknown"] = "unknown"
+    baggage_recheck_required: bool = False
+    airport_return_buffer_minutes: int = Field(default=180, ge=0, le=720)
+    terminal_transfer_buffer_minutes: int = Field(default=60, ge=0, le=360)
+
+    @model_validator(mode="after")
+    def validate_schedule(self):
+        if self.arrival_at.tzinfo is None or self.departure_at.tzinfo is None:
+            raise ValueError("Layover schedule times must include timezone offsets.")
+        if self.departure_at <= self.arrival_at:
+            raise ValueError("Onward departure must be after arrival.")
         return self
 
 
@@ -718,3 +737,85 @@ def optimize_journey_options(request: JourneyOptimizeRequest):
         )
     except ValueError as error:
         raise HTTPException(422, str(error)) from error
+
+
+@app.post("/api/layovers/evaluate")
+def evaluate_layover_window(request: LayoverEvaluateRequest):
+    try:
+        result = evaluate_layover(
+            arrival_at=request.arrival_at, departure_at=request.departure_at,
+            exit_eligibility=request.exit_eligibility,
+            baggage_recheck_required=request.baggage_recheck_required,
+            airport_return_buffer_minutes=request.airport_return_buffer_minutes,
+            terminal_transfer_buffer_minutes=request.terminal_transfer_buffer_minutes,
+        )
+        result["places_message"] = "Attraction discovery is unavailable until Google Places credentials, quotas, and cost limits are configured."
+        result["route_message"] = "Traffic-aware travel times are unavailable until the Google Routes provider is configured."
+        result["weather_message"] = "Weather data is unavailable in this stage because the forecast provider is not connected."
+        return result
+    except ValueError as error:
+        raise HTTPException(422, str(error)) from error
+
+
+@app.get("/api/providers/groq-layover")
+def groq_layover_status():
+    settings = get_settings()
+    if not settings.groq_layover_enabled:
+        reason = "provider_disabled"
+    elif not settings.groq_api_key:
+        reason = "missing_credentials"
+    elif not settings.max_external_calls_day or not settings.max_external_calls_month:
+        reason = "global_request_limits_not_configured"
+    elif not settings.groq_daily_limit or not settings.groq_monthly_limit or not settings.groq_max_calls_per_layover:
+        reason = "provider_request_limits_not_configured"
+    elif settings.groq_cost_per_call_inr is None:
+        reason = "provider_cost_estimate_not_configured"
+    else:
+        reason = None
+    return {"status": "unavailable", "reason": "verified_candidate_feed_unavailable",
+        "groq_provider_status": "ready" if reason is None else "unavailable",
+        "groq_unavailable_reason": reason, "model": settings.groq_layover_model,
+        "max_calls_per_layover": settings.groq_max_calls_per_layover,
+        "candidate_source_status": "unavailable"}
+
+
+@app.post("/api/layovers/plan")
+async def create_layover_plan(request: LayoverPlanRequest, session: Session = Depends(get_session)):
+    # Stage 8 has not yet connected an authorized Places + Routes candidate feed.
+    # Candidate data is never accepted from the browser as verified input.
+    return await plan_with_verified_candidates(
+        request=request, candidates=[], settings=get_settings(), session=session,
+        reserve_call=reserve_groq_layover_call, finish_call=finish_search_call,
+    )
+
+
+@app.get("/api/providers/groq-layover")
+def groq_layover_status():
+    settings = get_settings()
+    if not settings.groq_layover_enabled:
+        reason = "provider_disabled"
+    elif not settings.groq_api_key:
+        reason = "missing_credentials"
+    elif not settings.max_external_calls_day or not settings.max_external_calls_month:
+        reason = "global_request_limits_not_configured"
+    elif not settings.groq_daily_limit or not settings.groq_monthly_limit or not settings.groq_max_calls_per_layover:
+        reason = "provider_request_limits_not_configured"
+    elif settings.groq_cost_per_call_inr is None:
+        reason = "provider_cost_estimate_not_configured"
+    else:
+        reason = None
+    return {"status": "ready" if reason is None else "unavailable", "reason": reason,
+        "model": settings.groq_layover_model,
+        "max_calls_per_layover": settings.groq_max_calls_per_layover,
+        "places_source_status": "unavailable"}
+
+
+@app.post("/api/layovers/plan")
+async def create_layover_plan(request: LayoverPlanRequest, session: Session = Depends(get_session)):
+    # Stage 8 has not yet connected an authorized Places + Routes candidate feed.
+    # Do not accept client-supplied places as verified and do not reserve a Groq call.
+    settings = get_settings()
+    return await plan_with_verified_candidates(
+        request=request, candidates=[], settings=settings, session=session,
+        reserve_call=reserve_groq_layover_call, finish_call=finish_search_call,
+    )

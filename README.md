@@ -12,7 +12,7 @@ A production-minded travel planning platform for comparing door-to-door journeys
 
 ## Project status
 
-**Current stage: Stage 7 — multimodal graph optimization.** FDR can time-order sourced flight options and estimated airport-access legs, apply transfer buffers, explain separate-ticket risks, and mark Pareto-efficient options when costs are comparable. Stage 6 provides station discovery and official NTES/IRCTC fallbacks, but live train schedules remain unavailable pending an authorized provider.
+**Current stage: Stage 9 — guarded Groq layover-planner foundation.** The UI has an explicit planner action and the backend enforces structured output, candidate-only selection, deterministic revalidation, and quota/cost gates. End-to-end planning remains unavailable until Stage 8 connects verified Places and Routes data.
 
 ## Planned structure
 
@@ -40,7 +40,7 @@ Stage 1 checks are in [docs/stage-1.md](docs/stage-1.md). Stage 2 setup and API 
 Stage 4 route and provider controls are in [docs/stage-4.md](docs/stage-4.md).
 Stage 5 itinerary ranking and access estimates are in [docs/stage-5.md](docs/stage-5.md).
 Stage 6 station discovery, provider access research, costs, and limitations are in [docs/stage-6.md](docs/stage-6.md).
-Stage 7 route graph, ranking rules, verification, and live-data limitations are in [docs/stage-7.md](docs/stage-7.md).
+Stage 7 route graph, ranking rules, verification, and live-data limitations are in [docs/stage-7.md](docs/stage-7.md). Stage 8 and Stage 9 implementation status and provider gaps are in [docs/stage-8.md](docs/stage-8.md) and [docs/stage-9.md](docs/stage-9.md).
 
 ## Run the backend
 

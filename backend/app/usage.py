@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from decimal import Decimal, ROUND_CEILING
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -168,6 +169,62 @@ def reserve_google_maps_call(session: Session, settings: Settings, operation: st
 
     usage = ProviderUsage(provider="google_maps", operation=operation,
         request_fingerprint=fingerprint, status="reserved", estimated_cost_inr=estimate, requested_at=now)
+    session.add(usage)
+    session.commit()
+    session.refresh(usage)
+    return True, None, usage
+
+
+def reserve_groq_layover_call(session: Session, settings: Settings,
+                              request_fingerprint: str) -> tuple[bool, str | None, ProviderUsage | None]:
+    """Reserve one explicitly triggered Groq request before any network access."""
+    if not settings.groq_layover_enabled:
+        return False, "groq_provider_disabled", None
+    if not settings.groq_api_key:
+        return False, "missing_credentials", None
+    if not settings.groq_layover_model:
+        return False, "model_not_configured", None
+    if not settings.max_external_calls_day or not settings.max_external_calls_month:
+        return False, "global_request_limits_not_configured", None
+    if not settings.groq_daily_limit or not settings.groq_monthly_limit:
+        return False, "provider_request_limits_not_configured", None
+    if not settings.groq_max_calls_per_layover:
+        return False, "per_layover_request_limit_not_configured", None
+    estimate = settings.groq_cost_per_call_inr
+    if estimate is None:
+        return False, "provider_cost_estimate_not_configured", None
+    booked_estimate = Decimal(str(estimate)).quantize(Decimal("0.01"), rounding=ROUND_CEILING)
+
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    month_start = current_month_start(now)
+    day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    total_month = session.scalar(select(func.count()).select_from(ProviderUsage).where(
+        ProviderUsage.requested_at >= month_start)) or 0
+    total_day = session.scalar(select(func.count()).select_from(ProviderUsage).where(
+        ProviderUsage.requested_at >= day_start)) or 0
+    groq_month = session.scalar(select(func.count()).select_from(ProviderUsage).where(
+        ProviderUsage.provider == "groq", ProviderUsage.operation == "layover_plan",
+        ProviderUsage.requested_at >= month_start)) or 0
+    groq_day = session.scalar(select(func.count()).select_from(ProviderUsage).where(
+        ProviderUsage.provider == "groq", ProviderUsage.operation == "layover_plan",
+        ProviderUsage.requested_at >= day_start)) or 0
+    calls_for_layover = session.scalar(select(func.count()).select_from(ProviderUsage).where(
+        ProviderUsage.provider == "groq", ProviderUsage.operation == "layover_plan",
+        ProviderUsage.request_fingerprint == request_fingerprint)) or 0
+    spent = session.scalar(select(func.coalesce(func.sum(ProviderUsage.estimated_cost_inr), 0)).where(
+        ProviderUsage.requested_at >= month_start)) or 0
+    if total_month >= settings.max_external_calls_month or groq_month >= settings.groq_monthly_limit:
+        return False, "monthly_request_limit_reached", None
+    if total_day >= settings.max_external_calls_day or groq_day >= settings.groq_daily_limit:
+        return False, "daily_request_limit_reached", None
+    if calls_for_layover >= settings.groq_max_calls_per_layover:
+        return False, "per_layover_request_limit_reached", None
+    if float(spent) + float(booked_estimate) > settings.monthly_external_budget_inr:
+        return False, "monthly_spend_limit_reached", None
+
+    usage = ProviderUsage(provider="groq", operation="layover_plan",
+        request_fingerprint=request_fingerprint, status="reserved",
+        estimated_cost_inr=booked_estimate, requested_at=now)
     session.add(usage)
     session.commit()
     session.refresh(usage)

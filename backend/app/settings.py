@@ -60,6 +60,13 @@ class Settings:
     google_maps_timeout_seconds: float = 20.0
     max_google_maps_calls_per_journey: int = 0
     airport_checkin_buffer_minutes: int = 120
+    groq_api_key: str | None = None
+    groq_layover_enabled: bool = False
+    groq_layover_model: str = "openai/gpt-oss-20b"
+    groq_daily_limit: int = 0
+    groq_monthly_limit: int = 0
+    groq_max_calls_per_layover: int = 0
+    groq_cost_per_call_inr: float | None = None
 
 
 def get_settings() -> Settings:
@@ -106,4 +113,11 @@ def get_settings() -> Settings:
         google_maps_timeout_seconds=maps_timeout,
         max_google_maps_calls_per_journey=_integer("MAX_GOOGLE_MAPS_CALLS_PER_JOURNEY"),
         airport_checkin_buffer_minutes=min(360, _integer("AIRPORT_CHECKIN_BUFFER_MINUTES", 120)),
+        groq_api_key=(os.getenv("GROQ_API_KEY", "").strip() or None),
+        groq_layover_enabled=_enabled("ENABLE_GROQ_LAYOVER"),
+        groq_layover_model=os.getenv("GROQ_LAYOVER_MODEL", "openai/gpt-oss-20b").strip(),
+        groq_daily_limit=_integer("GROQ_MAX_CALLS_PER_DAY"),
+        groq_monthly_limit=_integer("GROQ_MAX_CALLS_PER_MONTH"),
+        groq_max_calls_per_layover=_integer("MAX_GROQ_CALLS_PER_LAYOVER"),
+        groq_cost_per_call_inr=_amount("GROQ_MAX_COST_PER_CALL_INR"),
     )
