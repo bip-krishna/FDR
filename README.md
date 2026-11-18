@@ -1,8 +1,6 @@
 # FDR — Multimodal Travel Planner
 
-A travel planner in development for comparing door-to-door journeys across flights, rail, and ground transfers. It is being built in the stages defined in [plan.md](plan.md).
-
-[Project status](#project-status) · [Run the frontend](#run-the-frontend) · [Run the backend](#run-the-backend) · [Reference data](data/README.md)
+A production-minded travel planning platform for comparing door-to-door journeys across flights, rail, and ground transfers. It is being built in the stages defined in [plan.md](plan.md).
 
 ## Product rules
 
