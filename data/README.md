@@ -1,8 +1,4 @@
-# FDR · Reference data
-
-Source records for the multimodal planner, with provenance and download details. See the [project README](../README.md) for development setup.
-
-## OurAirports source data
+# OurAirports source data
 
 `airports.csv` is the OurAirports airport dataset downloaded on 2026-10-24 from https://davidmegginson.github.io/ourairports-data/airports.csv (linked from https://ourairports.com/data/).
 
